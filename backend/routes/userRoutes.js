@@ -64,19 +64,21 @@ router.patch('/location', auth, async (req, res) => {
   }
 });
 
+// Rota para atualizar disponibilidade do motorista
 router.patch('/availability', auth, async (req, res) => {
   try {
-    const { isAvailable } = req.body;
-    
+    // Verifica se é um motorista
     if (req.user.role !== 'driver') {
-      return res.status(403).json({ message: 'Apenas motoristas podem atualizar disponibilidade' });
+      return res.status(403).json({ message: 'Acesso negado. Apenas motoristas podem atualizar disponibilidade.' });
     }
 
-    const user = await User.findById(req.user.id);
-    user.isAvailable = isAvailable;
-    await user.save();
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { isAvailable: req.body.isAvailable },
+      { new: true }
+    );
 
-    res.json({ message: 'Disponibilidade atualizada com sucesso' });
+    res.json(user);
   } catch (error) {
     console.error('Erro ao atualizar disponibilidade:', error);
     res.status(500).json({ message: 'Erro ao atualizar disponibilidade' });
@@ -129,6 +131,24 @@ router.get('/', auth, async (req, res) => {
   } catch (error) {
     console.error('Erro ao listar usuários:', error);
     res.status(500).json({ message: 'Erro ao listar usuários' });
+  }
+});
+
+// Rota para buscar usuário
+router.get('/:id', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id)
+      .select('-password') // Exclui a senha dos dados retornados
+      .lean(); // Converte para objeto JavaScript puro
+
+    if (!user) {
+      return res.status(404).json({ message: 'Usuário não encontrado' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error('Erro ao buscar usuário:', error);
+    res.status(500).json({ message: 'Erro ao buscar usuário' });
   }
 });
 

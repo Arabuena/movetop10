@@ -156,7 +156,7 @@ export default function Navbar() {
                   Entrar
                 </Link>
                 <Link 
-                  to="/register/passenger" 
+                  to="/register" 
                   className="bg-white text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-md text-sm font-medium"
                 >
                   Cadastrar
@@ -245,7 +245,7 @@ export default function Navbar() {
                   Entrar
                 </Link>
                 <Link 
-                  to="/register/passenger" 
+                  to="/register" 
                   className="block text-white hover:bg-blue-600 px-3 py-2 rounded-md text-base font-medium"
                 >
                   Cadastrar
