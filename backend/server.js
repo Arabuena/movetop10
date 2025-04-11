@@ -21,6 +21,7 @@ app.use('/api/rides', require('./routes/rideRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
+app.use('/api/driver', require('./routes/driverRoutes'));
 
 // Servir arquivos estáticos do frontend em produção
 if (process.env.NODE_ENV === 'production') {

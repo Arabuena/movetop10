@@ -19,6 +19,8 @@ const Login = () => {
       setLoading(true);
       const response = await login(formData.email, formData.password);
       
+      console.log('User role:', response.user.role); // Debug
+      
       // Redirecionar baseado no papel do usuário
       if (response.user.role === 'admin') {
         navigate('/admin/dashboard');
@@ -31,6 +33,7 @@ const Login = () => {
       }
     } catch (err) {
       setError('Falha no login. Verifique suas credenciais.');
+      console.error('Login error:', err); // Debug
     } finally {
       setLoading(false);
     }

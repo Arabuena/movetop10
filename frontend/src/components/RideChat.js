@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import api from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -41,8 +41,7 @@ export default function RideChat() {
     return () => clearInterval(interval);
   }, []);
 
-  // Buscar mensagens
-  const fetchMessages = async (rideId) => {
+  const fetchMessages = useCallback(async (rideId) => {
     try {
       const response = await api.get(`/messages/ride/${rideId}`);
       setMessages(response.data);
@@ -53,7 +52,13 @@ export default function RideChat() {
       setError('Erro ao carregar mensagens');
       setLoading(false);
     }
-  };
+  }, [scrollToBottom]);
+
+  useEffect(() => {
+    if (currentRide?._id) {
+      fetchMessages(currentRide._id);
+    }
+  }, [currentRide, fetchMessages]);
 
   // Enviar mensagem
   const handleSendMessage = async (e) => {

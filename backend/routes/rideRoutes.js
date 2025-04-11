@@ -8,102 +8,55 @@ const {
   startRide,
   completeRide,
   cancelRide,
-  getCurrentRide
+  getCurrentRide,
+  rateRide,
+  arrivedAtPickup,
+  checkActiveRide,
+  updateRideStatus
 } = require('../controllers/rideController');
 const Ride = require('../models/Ride');
 
 // Todas as rotas precisam de autenticação
 router.use(auth);
 
-// Rotas de corrida
+// Rotas para passageiros
 router.post('/request', requestRide);
-router.get('/available', getAvailableRides);
-router.post('/accept/:rideId', acceptRide);
-router.post('/start/:rideId', startRide);
-router.post('/complete/:rideId', completeRide);
-router.post('/cancel/:rideId', cancelRide);
 router.get('/current', getCurrentRide);
+router.post('/:rideId/cancel', cancelRide);
+router.post('/:rideId/rate', rateRide);
 
-router.post('/', auth, async (req, res) => {
-  try {
-    // Verifica se é um passageiro
-    if (req.user.role !== 'passenger') {
-      return res.status(403).json({ message: 'Apenas passageiros podem solicitar corridas' });
-    }
+// Rotas para motoristas
+router.get('/available', getAvailableRides);
+router.post('/:rideId/accept', acceptRide);
+router.post('/:rideId/arrived', arrivedAtPickup);
+router.post('/:rideId/start', startRide);
+router.post('/:rideId/complete', completeRide);
 
-    const { origin, destination, distance, duration, price } = req.body;
+// Adicionar nova rota para verificar corrida ativa
+router.get('/active', checkActiveRide);
 
-    // Log para debug
-    console.log('Criando corrida:', {
-      passenger: req.user.id,
-      origin,
-      destination,
-      distance,
-      duration,
-      price
-    });
-
-    // Valida os dados
-    if (!origin || !destination || !origin.coordinates || !destination.coordinates) {
-      return res.status(400).json({ 
-        message: 'Dados inválidos',
-        required: ['origin.coordinates', 'destination.coordinates']
-      });
-    }
-
-    // Cria a corrida
-    const ride = new Ride({
-      passenger: req.user.id,
-      origin: {
-        type: 'Point',
-        coordinates: origin.coordinates,
-        address: origin.address
-      },
-      destination: {
-        type: 'Point',
-        coordinates: destination.coordinates,
-        address: destination.address
-      },
-      distance,
-      duration,
-      price,
-      status: 'pending'
-    });
-
-    await ride.save();
-
-    // Retorna a corrida criada
-    res.status(201).json(ride);
-  } catch (error) {
-    console.error('Erro ao criar corrida:', error);
-    res.status(500).json({ 
-      message: 'Erro ao criar corrida',
-      error: error.message 
-    });
-  }
-});
+// Adicionar rota para atualizar status
+router.put('/:rideId/status', updateRideStatus);
 
 // Rota para buscar uma corrida específica
-router.get('/:rideId', auth, async (req, res) => {
+router.get('/:rideId', async (req, res) => {
   try {
     const ride = await Ride.findById(req.params.rideId)
-      .populate('passenger', 'name')
-      .populate('driver', 'name');
+      .populate('passenger driver', 'name phone');
 
     if (!ride) {
       return res.status(404).json({ message: 'Corrida não encontrada' });
     }
 
     // Verifica se o usuário tem permissão para ver esta corrida
-    if (ride.passenger._id.toString() !== req.user.id && 
-        (!ride.driver || ride.driver._id.toString() !== req.user.id)) {
+    if (ride.passenger.toString() !== req.user.id && 
+        (!ride.driver || ride.driver.toString() !== req.user.id)) {
       return res.status(403).json({ message: 'Sem permissão para ver esta corrida' });
     }
 
     res.json(ride);
   } catch (error) {
-    console.error('Erro ao buscar corrida:', error);
-    res.status(500).json({ message: 'Erro ao buscar corrida' });
+    res.status(500).json({ message: error.message });
   }
 });
 

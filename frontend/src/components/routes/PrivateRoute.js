@@ -14,15 +14,16 @@ const PrivateRoute = ({ children, allowedRoles = [] }) => {
   }
 
   if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
-    // Redirecionar para dashboard apropriado
-    if (user.role === 'admin') {
-      return <Navigate to="/admin/dashboard" />;
-    } else if (user.role === 'driver') {
-      return <Navigate to="/driver-dashboard" />;
-    } else if (user.role === 'passenger') {
-      return <Navigate to="/passenger-dashboard" />;
+    switch (user.role) {
+      case 'admin':
+        return <Navigate to="/admin/dashboard" />;
+      case 'driver':
+        return <Navigate to="/driver-dashboard" />;
+      case 'passenger':
+        return <Navigate to="/passenger-dashboard" />;
+      default:
+        return <Navigate to="/" />;
     }
-    return <Navigate to="/" />;
   }
 
   return children;
