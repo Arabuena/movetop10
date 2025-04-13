@@ -13,7 +13,9 @@
     "node": ">=16.0.0"
   },
   "dependencies": {
+    "@reach/combobox": "^0.18.0",
     "@react-google-maps/api": "^2.20.6",
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "use-places-autocomplete": "^4.0.1"
   }
 }

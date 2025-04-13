@@ -1,0 +1,18 @@
+# Segurança
+Header set Content-Security-Policy "default-src 'self' https: data: 'unsafe-inline' 'unsafe-eval'; frame-ancestors 'none';"
+Header set X-Content-Type-Options "nosniff"
+Header unset X-Frame-Options
+Header unset X-XSS-Protection
+
+# Cache
+Header set Cache-Control "max-age=31536000, public"
+Header unset Expires
+
+# CORS
+Header set Access-Control-Allow-Origin "*"
+Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+Header set Access-Control-Allow-Headers "Content-Type, Authorization"
+
+# Charset
+AddDefaultCharset utf-8
+AddCharset utf-8 .html .css .js .json 

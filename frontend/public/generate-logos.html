@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Generate Logos</title>
+</head>
+<body>
+  <script>
+    function createLogo(size) {
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+
+      // Fundo vermelho
+      ctx.fillStyle = '#E30613';
+      ctx.fillRect(0, 0, size, size);
+
+      // Círculos brancos
+      ctx.fillStyle = 'white';
+      const radius = size * 0.15;
+      const center1x = size * 0.375;
+      const center2x = size * 0.625;
+      const centery = size * 0.5;
+
+      ctx.beginPath();
+      ctx.arc(center1x, centery, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(center2x, centery, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      return canvas.toDataURL('image/png');
+    }
+
+    // Gerar e mostrar os logos
+    const sizes = [192, 512];
+    sizes.forEach(size => {
+      const img = document.createElement('img');
+      img.src = createLogo(size);
+      img.style.margin = '10px';
+      document.body.appendChild(img);
+      
+      const link = document.createElement('a');
+      link.download = `logo${size}.png`;
+      link.href = img.src;
+      link.textContent = `Download logo${size}.png`;
+      link.style.display = 'block';
+      link.style.margin = '10px';
+      document.body.appendChild(link);
+    });
+  </script>
+</body>
+</html> 
