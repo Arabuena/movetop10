@@ -33,11 +33,11 @@ const PassengerLogin = () => {
   return (
     <>
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="text-center text-2xl font-bold text-99-gray-900">
+        <h2 className="text-center text-2xl font-bold text-move-gray-900">
           Entrar como passageiro
         </h2>
-        <p className="mt-2 text-center text-sm text-99-gray-600">
-          Viaje com a 99
+        <p className="mt-2 text-center text-sm text-move-gray-600">
+          Viaje com a Move
         </p>
       </div>
 
@@ -61,7 +61,7 @@ const PassengerLogin = () => {
           </div>
 
           {error && (
-            <div className="text-sm text-99-primary">
+            <div className="text-sm text-move-primary">
               {error}
             </div>
           )}
@@ -77,7 +77,7 @@ const PassengerLogin = () => {
           <div className="text-sm text-center">
             <Link
               to="/register/passenger"
-              className="font-medium text-99-primary hover:text-99-primary/90"
+              className="font-medium text-move-primary hover:text-move-primary/90"
             >
               Ainda não tem conta? Cadastre-se
             </Link>

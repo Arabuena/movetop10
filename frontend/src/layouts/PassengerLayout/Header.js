@@ -5,14 +5,14 @@ const Header = () => {
   const { user } = useAuth();
 
   return (
-    <header className="bg-99-primary">
+    <header className="bg-move-primary">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <img
               className="h-8 w-auto"
-              src="/images/logo-99-white.svg"
-              alt="99"
+              src="/logo192.png"
+              alt="Move"
             />
           </div>
           <div className="flex items-center">

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
 import PhoneInput from '../../../components/common/PhoneInput';
 import Button from '../../../components/common/Button';
+import Logo from '../../../components/common/Logo';
 
 const DriverLogin = () => {
   const navigate = useNavigate();
@@ -29,7 +30,8 @@ const DriverLogin = () => {
   return (
     <>
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="text-center text-2xl font-bold text-99-gray-900">
+        <Logo className="mx-auto h-12 w-auto mb-8" />
+        <h2 className="text-center text-2xl font-bold text-move-gray-900">
           Entrar como motorista
         </h2>
       </div>
@@ -64,7 +66,7 @@ const DriverLogin = () => {
           <div className="text-sm text-center">
             <Link
               to="/register/driver"
-              className="font-medium text-99-primary hover:text-99-primary/90"
+              className="font-medium text-move-primary hover:text-move-primary/90"
             >
               Ainda não tem conta? Cadastre-se
             </Link>

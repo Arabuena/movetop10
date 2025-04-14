@@ -68,7 +68,7 @@ body {
 }
 
 :focus {
-  outline: 2px solid #E30613;
+  outline: 2px solid #8A2BE2;
   outline-offset: 2px;
 }
 
@@ -77,6 +77,6 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid #E30613;
+  outline: 2px solid #8A2BE2;
   outline-offset: 2px;
 } 

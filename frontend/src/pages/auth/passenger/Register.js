@@ -4,6 +4,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import PhoneInput from '../../../components/common/PhoneInput';
 import Input from '../../../components/common/Input';
 import Button from '../../../components/common/Button';
+import Logo from '../../../components/common/Logo';
 
 const PassengerRegister = () => {
   const navigate = useNavigate();
@@ -54,11 +55,12 @@ const PassengerRegister = () => {
   return (
     <>
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="text-center text-2xl font-bold text-99-gray-900">
+        <Logo className="mx-auto h-12 w-auto mb-8" />
+        <h2 className="text-center text-2xl font-bold text-move-gray-900">
           Cadastro de passageiro
         </h2>
-        <p className="mt-2 text-center text-sm text-99-gray-600">
-          Comece a viajar com a 99
+        <p className="mt-2 text-center text-sm text-move-gray-600">
+          Comece a viajar com a Move
         </p>
       </div>
 
@@ -111,7 +113,7 @@ const PassengerRegister = () => {
           />
 
           {error && (
-            <div className="text-sm text-99-primary">
+            <div className="text-sm text-move-primary">
               {error}
             </div>
           )}
@@ -123,7 +125,7 @@ const PassengerRegister = () => {
           <div className="text-sm text-center">
             <Link
               to="/login/passenger"
-              className="font-medium text-99-primary hover:text-99-primary/90"
+              className="font-medium text-move-primary hover:text-move-primary/90"
             >
               Já tem uma conta? Entre aqui
             </Link>

@@ -5,7 +5,7 @@ import BottomNav from './BottomNav';
 
 const PassengerLayout = () => {
   return (
-    <div className="min-h-screen bg-99-gray-100">
+    <div className="min-h-screen bg-move-gray-100">
       <Header />
       <main className="pb-16"> {/* Espaço para BottomNav */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

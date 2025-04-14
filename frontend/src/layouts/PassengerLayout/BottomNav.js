@@ -10,7 +10,7 @@ const navigation = [
 
 const BottomNav = () => {
   return (
-    <nav className="fixed bottom-0 w-full bg-white border-t border-99-gray-200">
+    <nav className="fixed bottom-0 w-full bg-white border-t border-move-gray-200">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex justify-around">
           {navigation.map((item) => (
@@ -20,8 +20,8 @@ const BottomNav = () => {
               className={({ isActive }) =>
                 `flex flex-col items-center py-2 px-3 text-xs ${
                   isActive
-                    ? 'text-99-primary'
-                    : 'text-99-gray-600 hover:text-99-gray-900'
+                    ? 'text-move-primary'
+                    : 'text-move-gray-600 hover:text-move-gray-900'
                 }`
               }
             >

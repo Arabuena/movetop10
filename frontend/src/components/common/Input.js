@@ -4,10 +4,10 @@ import InputMask from 'react-input-mask';
 const Input = ({ label, id, mask, error, ...props }) => {
   const inputProps = {
     id,
-    className: `appearance-none block w-full px-3 py-2 border rounded-md shadow-sm placeholder-99-gray-400 focus:outline-none focus:ring-99-primary focus:border-99-primary ${
+    className: `appearance-none block w-full px-3 py-2 border rounded-md shadow-sm placeholder-move-gray-400 focus:outline-none focus:ring-move-primary focus:border-move-primary ${
       error 
         ? 'border-red-300 text-red-900 focus:ring-red-500 focus:border-red-500' 
-        : 'border-99-gray-300'
+        : 'border-move-gray-300'
     }`,
     ...props
   };
@@ -15,7 +15,7 @@ const Input = ({ label, id, mask, error, ...props }) => {
   return (
     <div>
       {label && (
-        <label htmlFor={id} className="block text-sm font-medium text-99-gray-700">
+        <label htmlFor={id} className="block text-sm font-medium text-move-gray-700">
           {label}
         </label>
       )}
