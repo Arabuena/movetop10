@@ -3,7 +3,7 @@ import { GoogleMap, Marker, DirectionsRenderer, useJsApiLoader } from '@react-go
 import { useSocket } from '../../contexts/SocketContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Switch } from '@headlessui/react';
-import { PhoneIcon, ChatBubbleLeftIcon, MapPinIcon, UserCircleIcon, CurrencyDollarIcon, ClockIcon, StarIcon } from '@heroicons/react/24/outline';
+import { PhoneIcon, ChatBubbleLeftIcon, MapPinIcon, UserCircleIcon, CurrencyDollarIcon, ClockIcon } from '@heroicons/react/24/outline';
 import Chat from '../../components/Chat';
 import { createBeepSound } from '../../utils/createBeepSound';
 import { toast } from 'react-hot-toast';

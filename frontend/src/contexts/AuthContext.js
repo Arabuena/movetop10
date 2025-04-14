@@ -9,25 +9,52 @@ export const AuthProvider = ({ children }) => {
     return storedUser ? JSON.parse(storedUser) : null;
   });
   const [loading, setLoading] = useState(false);
+  const [token, setToken] = useState(() => {
+    const storedToken = localStorage.getItem('token');
+    return storedToken ? storedToken : null;
+  });
 
-  const login = async (phone, userType) => {
+  const login = async (phone, userType, password) => {
     try {
-      setLoading(true);
-      const response = await api.post('/api/auth/login', { phone, userType });
+      console.log('AuthContext: Iniciando login', { phone, userType });
+      
+      const response = await api.post('/auth/login', {
+        phone,
+        userType,
+        password
+      });
+
       const { token, user } = response.data;
       
+      console.log('AuthContext: Login bem-sucedido', { 
+        userId: user._id,
+        phone: user.phone 
+      });
+
+      setToken(token);
+      setUser(user);
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
-      setUser(user);
-    } finally {
-      setLoading(false);
+
+      // Configurar o token no axios para futuras requisições
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+      return user; // Retornar o usuário para uso no componente
+    } catch (error) {
+      console.error('AuthContext: Erro no login', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        url: error.config?.url
+      });
+      throw error;
     }
   };
 
   const register = async (data, userType) => {
     try {
       setLoading(true);
-      const response = await api.post('/api/auth/register', { ...data, userType });
+      const response = await api.post('/auth/register', { ...data, userType });
       const { token, user } = response.data;
       
       localStorage.setItem('token', token);

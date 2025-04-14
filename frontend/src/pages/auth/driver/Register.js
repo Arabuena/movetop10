@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
-import PhoneInput from '../../../components/common/PhoneInput';
 import Input from '../../../components/common/Input';
 import Button from '../../../components/common/Button';
 import Logo from '../../../components/common/Logo';
+import MaskedInput from '../../../components/common/MaskedInput';
+import { toast } from 'react-hot-toast';
 
 const DriverRegister = () => {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ const DriverRegister = () => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [passwordError, setPasswordError] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -23,7 +25,9 @@ const DriverRegister = () => {
       plate: '',
       year: '',
       color: ''
-    }
+    },
+    password: '',
+    confirmPassword: ''
   });
 
   const handleChange = (e) => {
@@ -54,6 +58,14 @@ const DriverRegister = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (step === 2) {
+      if (formData.password !== formData.confirmPassword) {
+        setPasswordError('As senhas não coincidem');
+        return;
+      }
+    }
+
     if (step < 3) {
       setStep(step + 1);
       return;
@@ -62,9 +74,13 @@ const DriverRegister = () => {
     try {
       setLoading(true);
       setError(null);
-      await register(formData, 'driver');
+      const submitData = { ...formData };
+      delete submitData.confirmPassword; // Remove o campo de confirmação antes de enviar
+      await register(submitData, 'driver');
+      toast.success('Conta criada com sucesso!');
       navigate('/driver');
     } catch (err) {
+      toast.error('Erro ao criar conta');
       setError('Erro ao criar conta. Tente novamente.');
     } finally {
       setLoading(false);
@@ -102,12 +118,14 @@ const DriverRegister = () => {
                   Celular
                 </label>
                 <div className="mt-1">
-                  <PhoneInput
+                  <MaskedInput
                     id="phone"
                     name="phone"
+                    mask="phone"
                     value={formData.phone}
                     onChange={handlePhoneChange}
                     required
+                    placeholder="(00) 00000-0000"
                   />
                 </div>
               </div>
@@ -126,26 +144,55 @@ const DriverRegister = () => {
 
           {step === 2 && (
             <>
-              <Input
-                label="CPF"
+              <MaskedInput
                 id="cpf"
                 name="cpf"
-                type="text"
+                mask="cpf"
                 value={formData.cpf}
                 onChange={handleChange}
                 required
-                mask="999.999.999-99"
+                placeholder="CPF"
               />
 
-              <Input
-                label="CNH"
+              <MaskedInput
                 id="cnh"
                 name="cnh"
-                type="text"
+                mask="cnh"
                 value={formData.cnh}
                 onChange={handleChange}
                 required
+                placeholder="CNH"
               />
+
+              <Input
+                label="Senha"
+                id="password"
+                name="password"
+                type="password"
+                value={formData.password}
+                onChange={handleChange}
+                required
+                minLength={6}
+                placeholder="Senha"
+              />
+
+              <Input
+                label="Confirmar Senha"
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                required
+                minLength={6}
+                placeholder="Confirmar Senha"
+              />
+
+              {passwordError && (
+                <div className="text-sm text-red-600">
+                  {passwordError}
+                </div>
+              )}
             </>
           )}
 

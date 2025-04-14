@@ -4,10 +4,12 @@
   "description": "Aplicativo de transporte estilo Uber",
   "main": "backend/server.js",
   "scripts": {
-    "start": "cd backend && node server.js",
+    "start": "node src/app.js",
     "build": "cd frontend && npm install && npm run build && cd ../backend && npm install",
-    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm start\"",
-    "install-deps": "npm install && cd frontend && npm install && cd ../backend && npm install"
+    "dev": "nodemon src/app.js",
+    "install-deps": "npm install && cd frontend && npm install && cd ../backend && npm install",
+    "setup": "node src/scripts/setupDatabase.js",
+    "migrate": "node src/scripts/migrateBoraMoveDb.js"
   },
   "engines": {
     "node": ">=16.0.0"

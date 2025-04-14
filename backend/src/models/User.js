@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
   name: {
@@ -7,8 +8,7 @@ const userSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    required: true,
-    unique: true
+    required: true
   },
   email: {
     type: String,
@@ -17,32 +17,65 @@ const userSchema = new mongoose.Schema({
   },
   cpf: {
     type: String,
-    required: true,
-    unique: true
+    sparse: true
   },
   userType: {
     type: String,
-    enum: ['driver', 'passenger'],
+    enum: ['passenger', 'driver', 'admin'],
     required: true
   },
   status: {
     type: String,
-    enum: ['available', 'busy', 'offline'],
+    enum: ['online', 'offline', 'busy', 'active'],
     default: 'offline'
   },
-  // Campos específicos para motorista
+  // Campos específicos para motoristas
   cnh: {
     type: String,
-    required: function() { return this.userType === 'driver'; }
+    sparse: true
   },
   vehicle: {
     model: String,
     plate: String,
     year: Number,
     color: String
+  },
+  isApproved: {
+    type: Boolean,
+    default: false
+  },
+  location: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: {
+      type: [Number],
+      default: [0, 0]
+    }
+  },
+  password: {
+    type: String,
+    required: true
   }
 }, {
   timestamps: true
+});
+
+userSchema.index({ location: '2dsphere' });
+
+// Hash da senha antes de salvar
+userSchema.pre('save', async function(next) {
+  if (!this.isModified('password')) return next();
+  
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
 
 module.exports = mongoose.model('User', userSchema); 
