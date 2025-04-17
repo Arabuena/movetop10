@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../../../contexts/SocketContext';
 import { toast } from 'react-hot-toast';
 import SelectDestination from './SelectDestination';
 import SelectCategory from './SelectCategory';
 import ConfirmRide from './ConfirmRide';
 import { calculateRideEstimates } from '../../../utils/rideCalculator';
+import RideStatus from './RideStatus';
 
 const STEPS = {
   SELECT_DESTINATION: 'select_destination',
@@ -14,8 +15,10 @@ const STEPS = {
 };
 
 const RideRequest = () => {
+  const [currentRide, setCurrentRide] = useState(null);
+  const { socket, requestRide } = useSocket();
+  const { rideId } = useParams();
   const navigate = useNavigate();
-  const { requestRide } = useSocket();
   const [currentStep, setCurrentStep] = useState(STEPS.SELECT_DESTINATION);
   const [rideData, setRideData] = useState({
     origin: null,
@@ -23,6 +26,40 @@ const RideRequest = () => {
     category: null,
     estimates: null
   });
+  const [rideDirections, setRideDirections] = useState(null);
+
+  // Carregar dados da corrida
+  useEffect(() => {
+    if (!rideId) return;
+    
+    // Buscar dados da corrida
+    fetch(`/api/rides/${rideId}`)
+      .then(res => res.json())
+      .then(data => {
+        console.log('Dados da corrida carregados:', data);
+        setCurrentRide(data);
+      })
+      .catch(err => console.error('Erro ao carregar corrida:', err));
+  }, [rideId]);
+
+  // Ouvir atualizações da corrida
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on('ride:updated', (updatedRide) => {
+      console.log('Corrida atualizada:', updatedRide);
+      
+      // Manter as directions ao atualizar a corrida
+      setCurrentRide({
+        ...updatedRide,
+        directions: rideDirections
+      });
+    });
+
+    return () => {
+      socket.off('ride:updated');
+    };
+  }, [socket, rideDirections]);
 
   const handleDestinationSelect = async (data) => {
     try {
@@ -35,6 +72,9 @@ const RideRequest = () => {
         destination: data.destination,
         estimates
       }));
+      
+      // Guardar as directions
+      setRideDirections(data.directions);
       
       setCurrentStep(STEPS.SELECT_CATEGORY);
     } catch (error) {
@@ -69,9 +109,9 @@ const RideRequest = () => {
           address: rideData.destination.address
         },
         price: rideData.estimates.prices[rideData.category.id],
-        distance: rideData.estimates.distance.value, // valor em metros
-        duration: rideData.estimates.duration.value, // valor em segundos
-        paymentMethod: 'cash' // ou poderia vir de uma seleção do usuário
+        distance: rideData.estimates.distance.value,
+        duration: rideData.estimates.duration.value,
+        paymentMethod: 'cash'
       };
 
       const ride = await requestRide(rideRequest);
@@ -79,7 +119,9 @@ const RideRequest = () => {
       toast.dismiss('searching-drivers');
       toast.success('Corrida solicitada com sucesso!');
       
-      // Socket irá redirecionar quando um motorista aceitar
+      // Atualizar o estado da corrida atual
+      setCurrentRide(ride);
+      
     } catch (error) {
       console.error('Erro ao solicitar corrida:', error);
       toast.dismiss('searching-drivers');
@@ -100,7 +142,29 @@ const RideRequest = () => {
     }
   };
 
-  const renderStep = () => {
+  const renderContent = () => {
+    // Se já existe uma corrida, mostrar o status dela
+    if (currentRide) {
+      switch (currentRide.status) {
+        case 'accepted':
+        case 'collecting':
+        case 'in_progress':
+          return (
+            <RideStatus
+              ride={currentRide}
+              origin={currentRide.origin}
+              destination={currentRide.destination}
+              initialDirections={rideDirections}
+            />
+          );
+        case 'completed':
+        case 'cancelled':
+          navigate('/passenger/home');
+          return null;
+      }
+    }
+
+    // Se não existe corrida ou está pendente, mostrar fluxo de solicitação
     switch (currentStep) {
       case STEPS.SELECT_DESTINATION:
         return (
@@ -135,7 +199,7 @@ const RideRequest = () => {
 
   return (
     <div className="h-screen">
-      {renderStep()}
+      {renderContent()}
     </div>
   );
 };

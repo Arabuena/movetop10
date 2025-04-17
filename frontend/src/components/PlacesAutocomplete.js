@@ -1,9 +1,14 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Autocomplete } from '@react-google-maps/api';
 import { MapPinIcon } from '@heroicons/react/24/outline';
 
 const PlacesAutocomplete = ({ value, onChange, placeholder, className }) => {
   const inputRef = useRef();
+  const [inputValue, setInputValue] = useState(value);
+
+  useEffect(() => {
+    setInputValue(value);
+  }, [value]);
 
   const handlePlaceSelect = () => {
     const autocomplete = inputRef.current;
@@ -12,15 +17,20 @@ const PlacesAutocomplete = ({ value, onChange, placeholder, className }) => {
     const place = autocomplete.getPlace();
     console.log('Place selected:', place);
 
-    if (place && place.geometry && place.geometry.location) {
-      const location = {
-        lat: place.geometry.location.lat(),
-        lng: place.geometry.location.lng(),
-        address: place.formatted_address
-      };
-      console.log('Sending location:', location);
-      onChange(location);
+    if (!place || !place.geometry) {
+      console.error('Sem dados de geometria');
+      return;
     }
+
+    const location = {
+      lat: place.geometry.location.lat(),
+      lng: place.geometry.location.lng(),
+      address: place.formatted_address
+    };
+
+    console.log('Enviando localização:', location);
+    setInputValue(place.formatted_address);
+    onChange(location);
   };
 
   return (
@@ -39,9 +49,10 @@ const PlacesAutocomplete = ({ value, onChange, placeholder, className }) => {
       >
         <input
           type="text"
-          defaultValue={value}
+          value={inputValue}
           placeholder={placeholder}
           className={className}
+          onChange={(e) => setInputValue(e.target.value)}
         />
       </Autocomplete>
     </div>

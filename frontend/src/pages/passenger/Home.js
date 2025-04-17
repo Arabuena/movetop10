@@ -2,14 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { GoogleMap, LoadScript, Marker, DirectionsRenderer, Autocomplete, useJsApiLoader } from '@react-google-maps/api';
 import { useSocket } from '../../contexts/SocketContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { MagnifyingGlassIcon, MapPinIcon, StarIcon, PhoneIcon, ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, MapPinIcon, StarIcon, PhoneIcon, ChatBubbleLeftIcon, HomeIcon, MapIcon, UserIcon, ArrowRightOnRectangleIcon, XMarkIcon, Bars3Icon as MenuIcon } from '@heroicons/react/24/outline';
 import Chat from '../../components/Chat';
 import { createBeepSound } from '../../utils/createBeepSound';
+import { useNavigate } from 'react-router-dom';
 
 const mapContainerStyle = {
   width: '100%',
-  height: 'calc(100vh - 200px)',
-  minHeight: '400px'
+  height: 'calc(100vh - 64px)',
+  position: 'relative'
 };
 
 const defaultCenter = {
@@ -29,7 +30,7 @@ const RIDE_STATUS = {
 };
 
 const PassengerHome = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { socket, isConnected, requestRide } = useSocket();
   const [currentRide, setCurrentRide] = useState(null);
   const [origin, setOrigin] = useState(null);
@@ -49,6 +50,13 @@ const PassengerHome = () => {
   const [eta, setEta] = useState(null);
   const [showNotification, setShowNotification] = useState(false);
   const [showRatingModal, setShowRatingModal] = useState(false);
+  const navigate = useNavigate();
+  const [showMenu, setShowMenu] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState(null);
+  const [stats, setStats] = useState({
+    totalRides: 0,
+    rating: 5.0
+  });
 
   useEffect(() => {
     if (!socket || !isConnected) {
@@ -123,6 +131,7 @@ const PassengerHome = () => {
             lng: position.coords.longitude
           };
           setOrigin(currentLocation);
+          setCurrentLocation(currentLocation);
         },
         (error) => {
           console.error('Erro ao obter localização:', error);
@@ -316,6 +325,24 @@ const PassengerHome = () => {
     );
   };
 
+  const menuItems = [
+    { icon: HomeIcon, text: 'Início', onClick: () => setShowMenu(false) },
+    { icon: MapIcon, text: 'Corridas', onClick: () => navigate('/passenger/rides') },
+    { icon: UserIcon, text: 'Perfil', onClick: () => navigate('/passenger/profile') },
+    { icon: ArrowRightOnRectangleIcon, text: 'Sair', onClick: logout }
+  ];
+
+  // Carregar estatísticas
+  useEffect(() => {
+    if (socket) {
+      socket.emit('passenger:getStats', {}, (response) => {
+        if (response.success) {
+          setStats(response.stats);
+        }
+      });
+    }
+  }, [socket]);
+
   if (!socket || !isConnected) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -352,107 +379,118 @@ const PassengerHome = () => {
   }
 
   return (
-    <div className="h-full bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Painel de busca */}
-          <div className="lg:col-span-1 bg-white rounded-lg shadow p-6">
-            <h1 className="text-2xl font-bold text-gray-900 mb-6">Para onde vamos?</h1>
-            
-            <div className="space-y-4">
-              <div>
-                <Autocomplete
-                  onLoad={setOriginAutocomplete}
-                  onPlaceChanged={() => handlePlaceSelect(originAutocomplete, setOrigin)}
-                >
-                  <div className="relative">
-                    <MapPinIcon className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Origem"
-                      className="pl-10 w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-99-primary focus:border-99-primary"
-                    />
-                  </div>
-                </Autocomplete>
-              </div>
-
-              <div>
-                <Autocomplete
-                  onLoad={setDestAutocomplete}
-                  onPlaceChanged={() => handlePlaceSelect(destAutocomplete, setDestination)}
-                >
-                  <div className="relative">
-                    <MapPinIcon className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Destino"
-                      className="pl-10 w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-99-primary focus:border-99-primary"
-                    />
-                  </div>
-                </Autocomplete>
-              </div>
-
-              {rideEstimate && (
-                <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Estimativa</h3>
-                  <div className="space-y-2 text-sm text-gray-600">
-                    <p>Distância: {rideEstimate.distance}</p>
-                    <p>Tempo: {rideEstimate.duration}</p>
-                    <p className="text-lg font-medium text-gray-900">
-                      Valor: R$ {rideEstimate.price.toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={handleRequestRide}
-                disabled={loading || !origin || !destination}
-                className="w-full py-3 px-4 bg-99-primary text-white rounded-lg font-medium disabled:opacity-50 hover:bg-99-primary/90 transition-colors"
-              >
-                {loading ? 'Solicitando...' : 'Solicitar Corrida'}
-              </button>
-            </div>
-          </div>
-
-          {/* Mapa */}
-          <div className="lg:col-span-2">
-            <div className="rounded-lg overflow-hidden shadow-lg">
-              <GoogleMap
-                mapContainerStyle={mapContainerStyle}
-                center={origin || defaultCenter}
-                zoom={13}
-                onClick={handleMapClick}
-                options={{
-                  zoomControl: true,
-                  streetViewControl: false,
-                  mapTypeControl: false,
-                  fullscreenControl: false
-                }}
-              >
-                {origin && (
-                  <Marker
-                    position={origin}
-                    label={{ text: "O", className: "marker-label" }}
-                  />
-                )}
-                {destination && (
-                  <Marker
-                    position={destination}
-                    label={{ text: "D", className: "marker-label" }}
-                  />
-                )}
-                {directions && <DirectionsRenderer directions={directions} />}
-              </GoogleMap>
-            </div>
-          </div>
-        </div>
-
-        {renderRideStatus()}
+    <div className="flex flex-col h-screen">
+      {/* Mapa logo abaixo da navbar */}
+      <div className="flex-1 relative">
+        <GoogleMap
+          mapContainerStyle={mapContainerStyle}
+          center={currentLocation || defaultCenter}
+          zoom={13}
+          onClick={handleMapClick}
+          options={{
+            zoomControl: true,
+            streetViewControl: false,
+            mapTypeControl: false,
+            fullscreenControl: false,
+            styles: [
+              {
+                featureType: "poi",
+                elementType: "labels",
+                stylers: [{ visibility: "off" }]
+              }
+            ]
+          }}
+        >
+          {origin && (
+            <Marker
+              position={origin}
+              label={{ text: "O", className: "marker-label" }}
+            />
+          )}
+          {destination && (
+            <Marker
+              position={destination}
+              label={{ text: "D", className: "marker-label" }}
+            />
+          )}
+          {directions && <DirectionsRenderer directions={directions} />}
+        </GoogleMap>
       </div>
 
+      {/* Painel de busca fixo na parte inferior */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white shadow-lg rounded-t-xl p-4 z-20">
+        <div className="max-w-lg mx-auto space-y-4">
+          <div>
+            <Autocomplete
+              onLoad={setOriginAutocomplete}
+              onPlaceChanged={() => handlePlaceSelect(originAutocomplete, setOrigin)}
+            >
+              <div className="relative">
+                <MapPinIcon className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Origem"
+                  className="pl-10 w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-move-primary focus:border-move-primary"
+                />
+              </div>
+            </Autocomplete>
+          </div>
+
+          <div>
+            <Autocomplete
+              onLoad={setDestAutocomplete}
+              onPlaceChanged={() => handlePlaceSelect(destAutocomplete, setDestination)}
+            >
+              <div className="relative">
+                <MapPinIcon className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Destino"
+                  className="pl-10 w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-move-primary focus:border-move-primary"
+                />
+              </div>
+            </Autocomplete>
+          </div>
+
+          {rideEstimate && (
+            <div className="p-3 bg-gray-50 rounded-lg">
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div>
+                  <div className="text-gray-500">Distância</div>
+                  <div className="font-medium">{rideEstimate.distance}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Tempo</div>
+                  <div className="font-medium">{rideEstimate.duration}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Valor</div>
+                  <div className="font-medium">R$ {rideEstimate.price.toFixed(2)}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={handleRequestRide}
+            disabled={loading || !origin || !destination}
+            className="w-full py-3 px-4 bg-move-primary text-white rounded-lg font-medium disabled:opacity-50 hover:bg-move-primary/90 transition-colors"
+          >
+            {loading ? 'Solicitando...' : 'Solicitar Corrida'}
+          </button>
+        </div>
+      </div>
+
+      {/* Status da corrida */}
+      {currentRide && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white shadow-lg rounded-t-xl p-4 z-30">
+          {renderRideStatus()}
+        </div>
+      )}
+
+      {/* Chat */}
       {showChat && currentRide?.driver && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl w-full max-w-md shadow-xl">
             <Chat
               rideId={currentRide._id}

@@ -26,7 +26,7 @@ const userSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['online', 'offline', 'busy', 'active'],
+    enum: ['offline', 'online', 'busy'],
     default: 'offline'
   },
   // Campos específicos para motoristas

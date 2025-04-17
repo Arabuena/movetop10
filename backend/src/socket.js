@@ -11,7 +11,7 @@ const handleDriverStatus = async (socket, { status }) => {
     console.log(`Atualizando status do motorista ${socket.userId} para ${status}`);
     const driver = await User.findByIdAndUpdate(
       socket.userId,
-      { status },
+      { status: status === 'online' ? 'online' : 'offline' },
       { new: true }
     );
 
@@ -97,7 +97,7 @@ module.exports = (io) => {
         if (userType === 'driver') {
           const driver = await User.findByIdAndUpdate(
             userId, 
-            { status: 'available' },
+            { status: 'online' },
             { new: true }
           );
           console.log(`Motorista ${userId} autenticado e disponível:`, driver);
@@ -107,7 +107,7 @@ module.exports = (io) => {
         socket.emit('authenticated', { 
           success: true,
           userType,
-          status: userType === 'driver' ? 'available' : undefined
+          status: userType === 'driver' ? 'online' : undefined
         });
 
         console.log(`Usuário ${userId} (${userType}) autenticado com sucesso`);
@@ -131,7 +131,7 @@ module.exports = (io) => {
 
         const driver = await User.findByIdAndUpdate(
           socket.userId,
-          { status },
+          { status: status === 'online' ? 'online' : 'offline' },
           { new: true }
         );
 
@@ -190,7 +190,7 @@ module.exports = (io) => {
         // Buscar motoristas disponíveis
         const availableDrivers = await User.find({
           userType: 'driver',
-          status: 'available'
+          status: 'online'
         });
 
         console.log(`Encontrados ${availableDrivers.length} motoristas disponíveis`);
@@ -227,7 +227,7 @@ module.exports = (io) => {
         
         // Verificar se o motorista está disponível
         const driver = await User.findById(socket.userId);
-        if (!driver || driver.status !== 'available') {
+        if (!driver || driver.status !== 'online') {
           throw new Error('Motorista não está disponível');
         }
 
@@ -398,7 +398,7 @@ module.exports = (io) => {
         }
 
         // Atualizar status do motorista
-        await User.findByIdAndUpdate(socket.userId, { status: 'available' });
+        await User.findByIdAndUpdate(socket.userId, { status: 'online' });
 
         // Notificar passageiro
         const passengerSocket = userSockets.get(ride.passenger._id.toString());
@@ -443,7 +443,7 @@ module.exports = (io) => {
 
         // Se foi cancelada pelo motorista, atualizar status dele para disponível
         if (socket.userType === 'driver') {
-          await User.findByIdAndUpdate(socket.userId, { status: 'available' });
+          await User.findByIdAndUpdate(socket.userId, { status: 'online' });
         }
 
         // Notificar o outro usuário (passageiro ou motorista)
@@ -543,23 +543,49 @@ module.exports = (io) => {
     });
 
     // Atualização de localização do motorista
-    socket.on('driver:updateLocation', async ({ rideId, location }) => {
+    socket.on('updateDriverLocation', async (location) => {
       try {
-        const ride = await Ride.findById(rideId);
-        if (!ride) {
-          throw new Error('Corrida não encontrada');
+        if (!socket.userId) {
+          throw new Error('Usuário não autenticado');
         }
 
-        // Notificar passageiro sobre nova localização
-        const passengerSocket = userSockets.get(ride.passenger._id.toString());
-        if (passengerSocket) {
-          passengerSocket.emit('driver:location', {
-            rideId,
-            location
-          });
+        // Atualizar localização do motorista
+        await User.findByIdAndUpdate(socket.userId, {
+          location: {
+            type: 'Point',
+            coordinates: [location.lng, location.lat]
+          }
+        });
+
+        // Se houver uma corrida em andamento, atualizar a localização na corrida
+        const activeRide = await Ride.findOne({
+          driver: socket.userId,
+          status: { $in: ['accepted', 'collecting', 'in_progress'] }
+        });
+
+        if (activeRide) {
+          activeRide.driverLocation = {
+            lat: location.lat,
+            lng: location.lng
+          };
+          await activeRide.save();
+
+          // Emitir atualização para o passageiro
+          const passengerSocket = userSockets.get(activeRide.passenger.toString());
+          if (passengerSocket) {
+            passengerSocket.emit('ride:driverLocation', {
+              rideId: activeRide._id,
+              location: location
+            });
+          }
         }
+
       } catch (error) {
         console.error('Erro ao atualizar localização:', error);
+        socket.emit('error', { 
+          message: 'Erro ao atualizar localização',
+          details: error.message 
+        });
       }
     });
 
@@ -588,7 +614,7 @@ module.exports = (io) => {
         await ride.save();
 
         // Atualizar status do motorista para disponível
-        await User.findByIdAndUpdate(socket.userId, { status: 'available' });
+        await User.findByIdAndUpdate(socket.userId, { status: 'online' });
 
         // Notificar passageiro
         const passengerSocket = userSockets.get(ride.passenger._id.toString());
@@ -728,39 +754,62 @@ module.exports = (io) => {
       }
     });
 
-    // Passageiro busca estatísticas
-    socket.on('passenger:getStats', async (data, callback) => {
+    // Motorista busca estatísticas
+    socket.on('driver:getStats', async (data, callback) => {
       try {
-        console.log(`Buscando estatísticas do passageiro ${socket.userId}`);
-        
-        const rides = await Ride.find({ 
-          passenger: socket.userId,
-          status: 'completed'
+        if (!socket.userId || socket.userType !== 'driver') {
+          throw new Error('Não autorizado');
+        }
+
+        // Definir início e fim do dia atual
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        // Buscar corridas completadas do dia
+        const rides = await Ride.find({
+          driver: socket.userId,
+          status: 'completed',
+          createdAt: {
+            $gte: today,
+            $lt: tomorrow
+          }
         });
 
-        // Calcular estatísticas
-        const totalRides = rides.length;
-        const totalDistance = rides.reduce((sum, ride) => sum + ride.distance, 0);
-        
-        // Calcular média de avaliação
-        const ratedRides = rides.filter(ride => ride.rating?.passenger);
-        const rating = ratedRides.length > 0 
-          ? ratedRides.reduce((sum, ride) => sum + ride.rating.passenger, 0) / ratedRides.length 
-          : 5.0;
+        console.log('Estatísticas do motorista:', {
+          userId: socket.userId,
+          totalRides: rides.length,
+          rides: rides.map(r => ({
+            id: r._id,
+            price: r.price,
+            status: r.status,
+            createdAt: r.createdAt
+          }))
+        });
+
+        // Calcular ganhos totais
+        const totalEarnings = rides.reduce((sum, ride) => {
+          // Garantir que o preço seja um número
+          const price = Number(ride.price) || 0;
+          return sum + price;
+        }, 0);
+
+        const stats = {
+          totalRides: rides.length,
+          totalEarnings: totalEarnings,
+          rating: 5 // Implementar cálculo de rating depois
+        };
 
         callback({
           success: true,
-          stats: {
-            totalRides,
-            totalDistance,
-            rating
-          }
+          stats
         });
       } catch (error) {
         console.error('Erro ao buscar estatísticas:', error);
         callback({
           success: false,
-          error: error.message || 'Erro ao buscar estatísticas'
+          error: error.message
         });
       }
     });
