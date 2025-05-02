@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: movetop10
+    env: node
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: REACT_APP_GOOGLE_MAPS_API_KEY
+        sync: false
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: movetop10-data
+      mountPath: /data
+      sizeGB: 1
+    plan: free 

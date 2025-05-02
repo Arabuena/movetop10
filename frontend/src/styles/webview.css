@@ -1,0 +1,21 @@
+/* Estilos específicos para WebView */
+.webview {
+  /* Prevenir comportamentos indesejados de scroll */
+  overflow: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.webview .map-container {
+  /* Garantir que o mapa funcione corretamente em WebView */
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Ajustes para elementos que podem causar problemas em WebView */
+.webview input,
+.webview button {
+  -webkit-appearance: none;
+  border-radius: 0;
+} 
