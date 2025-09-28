@@ -16,9 +16,12 @@ const io = new Server(httpServer, {
   cors: {
     origin: [
       process.env.FRONTEND_URL || 'http://localhost:3000',
+      'http://localhost:3001',
       'https://movetop10.onrender.com'
     ],
-    methods: ['GET', 'POST']
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization']
   }
 });
 
@@ -26,9 +29,12 @@ const io = new Server(httpServer, {
 app.use(cors({
   origin: [
     process.env.FRONTEND_URL || 'http://localhost:3000',
+    'http://localhost:3001',
     'https://movetop10.onrender.com'
   ],
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 app.use(requestLogger);
@@ -78,4 +84,4 @@ async function startServer() {
 // Iniciar servidor
 startServer();
 
-module.exports = app; 
+module.exports = app;

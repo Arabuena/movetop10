@@ -3,6 +3,8 @@ import { GoogleMap, LoadScript, Marker, DirectionsRenderer, Autocomplete, useJsA
 import { useSocket } from '../../contexts/SocketContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { MagnifyingGlassIcon, MapPinIcon, StarIcon, PhoneIcon, ChatBubbleLeftIcon, HomeIcon, MapIcon, UserIcon, ArrowRightOnRectangleIcon, XMarkIcon, Bars3Icon as MenuIcon } from '@heroicons/react/24/outline';
+import { useLocation } from '../../hooks/useLocation';
+import LocationError from '../../components/common/LocationError';
 import Chat from '../../components/Chat';
 import { createBeepSound } from '../../utils/createBeepSound';
 import { useNavigate } from 'react-router-dom';
@@ -122,24 +124,31 @@ const PassengerHome = () => {
     };
   }, [socket, isConnected]);
 
+  // Importando o hook useLocation melhorado
+  const { location, error: locationError, permissionStatus, requestPermission, isDefaultLocation } = useLocation();
+  
+  // Usando o hook useLocation para obter a localização atual
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const currentLocation = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          };
-          setOrigin(currentLocation);
-          setCurrentLocation(currentLocation);
-        },
-        (error) => {
-          console.error('Erro ao obter localização:', error);
-          setError('Não foi possível obter sua localização');
-        }
-      );
+    if (location) {
+      const currentLocation = {
+        lat: location.latitude,
+        lng: location.longitude
+      };
+      setOrigin(currentLocation);
+      setCurrentLocation(currentLocation);
+      
+      // Se for localização padrão, mostrar aviso
+      if (isDefaultLocation) {
+        setError('Usando localização aproximada. Para melhor experiência, permita o acesso à sua localização.');
+      }
     }
-  }, []);
+    
+    // Se houver erro de localização, atualizar o estado de erro
+    if (locationError) {
+      console.error('Erro ao obter localização:', locationError);
+      setError(locationError);
+    }
+  }, [location, locationError, isDefaultLocation]);
 
   const calculateRoute = useCallback(async () => {
     if (!origin || !destination || !isLoaded) return;
@@ -380,6 +389,16 @@ const PassengerHome = () => {
 
   return (
     <div className="relative h-screen">
+      {/* Componente de erro de localização */}
+      {locationError && (
+        <LocationError 
+          error={locationError}
+          permissionStatus={permissionStatus}
+          onRequestPermission={requestPermission}
+          onContinueWithDefault={() => setError(null)}
+        />
+      )}
+      
       {/* Menu lateral */}
       <div 
         className={`fixed inset-y-0 left-0 w-80 bg-white shadow-lg transform ${
@@ -580,4 +599,4 @@ const PassengerHome = () => {
   );
 };
 
-export default PassengerHome; 
+export default PassengerHome;

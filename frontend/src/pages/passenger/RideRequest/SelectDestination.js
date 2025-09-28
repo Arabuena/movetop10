@@ -2,34 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { GoogleMap, Marker } from '@react-google-maps/api';
 import { MapPinIcon } from '@heroicons/react/24/outline';
 import PlacesAutocomplete from '../../../components/PlacesAutocomplete';
+import { useLocation } from '../../../hooks/useLocation';
+import LocationError from '../../../components/common/LocationError';
 
 const SelectDestination = ({ onConfirm, onBack }) => {
   const [origin, setOrigin] = useState(null);
   const [destination, setDestination] = useState(null);
+  const { location, error: locationError, permissionStatus, requestPermission, isDefaultLocation } = useLocation();
 
-  // Detecta a localização atual do usuário
+  // Usa o hook useLocation para obter a localização atual
   useEffect(() => {
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        // Converte as coordenadas em um endereço (pode ser ajustado com uma API externa, se quiser)
-        setOrigin({
-          lat: latitude,
-          lng: longitude,
-          address: '' // Começa vazio, mas pode ser preenchido após reverso geocoding se quiser
-        });
-      },
-      (error) => {
-        console.error('Erro ao obter localização:', error);
-        // Define um fallback caso não permita geolocalização
-        setOrigin({
-          lat: -16.6799,
-          lng: -49.2556,
-          address: 'Localização padrão (Goiânia)'
-        });
-      }
-    );
-  }, []);
+    if (location) {
+      setOrigin({
+        lat: location.latitude,
+        lng: location.longitude,
+        address: isDefaultLocation ? 'Localização aproximada' : ''
+      });
+    }
+  }, [location, isDefaultLocation]);
 
   const handleOriginChange = (location) => {
     setOrigin(location);
@@ -47,6 +37,16 @@ const SelectDestination = ({ onConfirm, onBack }) => {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
+      {/* Componente de erro de localização */}
+      {locationError && (
+        <LocationError 
+          error={locationError}
+          permissionStatus={permissionStatus}
+          onRequestPermission={requestPermission}
+          onContinueWithDefault={() => {/* Continuar com localização padrão */}}
+        />
+      )}
+      
       {/* Mapa */}
       <div className="w-full h-64 md:h-96">
         <GoogleMap
