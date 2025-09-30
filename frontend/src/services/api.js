@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { addCorsProxy } from './corsProxy';
 
 // Add a check for the API URL
 const API_URL = process.env.REACT_APP_API_URL;
@@ -7,8 +6,8 @@ if (!API_URL) {
   console.error('REACT_APP_API_URL is not defined in environment variables');
 }
 
-// Aplicar proxy CORS se necessário
-const baseURL = addCorsProxy(`${API_URL}/api`);
+// Usar a URL diretamente sem proxy CORS
+const baseURL = `${API_URL}/api`;
 console.log('Using API URL:', baseURL);
 
 const api = axios.create({
@@ -45,8 +44,8 @@ async function makeRequest(method, endpoint, data) {
       throw new Error('API URL is not configured');
     }
     
-    // Aplicar proxy CORS se necessário
-    const url = addCorsProxy(`${API_URL}/api${endpoint}`);
+    // Usar a URL diretamente sem proxy CORS
+    const url = `${API_URL}/api${endpoint}`;
     
     const response = await axios({
       method,
