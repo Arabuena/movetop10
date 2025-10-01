@@ -15,7 +15,11 @@ const LocationError = ({
   onContinueWithDefault,
   permissionStatus = 'prompt'
 }) => {
+  // Não exibir mensagem de erro de timeout
   if (!error) return null;
+  
+  // Verificar se é um erro de GPS e adicionar instruções específicas
+  const isGPSError = error.includes('GPS') || error.includes('indisponível');
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -56,6 +60,17 @@ const LocationError = ({
                 <li>Acesse as configurações do navegador</li>
                 <li>Procure por "Permissões" ou "Privacidade"</li>
                 <li>Habilite o acesso à localização para este site</li>
+              </ol>
+            </div>
+          )}
+          
+          {isGPSError && (
+            <div className="text-sm text-gray-500 text-center mt-4">
+              <p>Para resolver o problema de GPS indisponível:</p>
+              <ol className="list-decimal list-inside mt-2 text-left">
+                <li>Verifique se o GPS do seu dispositivo está ativado</li>
+                <li>Certifique-se de estar em um local com boa recepção de sinal</li>
+                <li>Reinicie o aplicativo após ativar o GPS</li>
               </ol>
             </div>
           )}

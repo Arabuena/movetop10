@@ -1,9 +1,33 @@
 import { useState, useEffect } from 'react';
 
+// Estratégia de tentativas progressivas para obter localização
+const LOCATION_STRATEGIES = [
+  {
+    enableHighAccuracy: true,
+    timeout: 15000,
+    maximumAge: 0,
+    description: 'Alta precisão'
+  },
+  {
+    enableHighAccuracy: true,
+    timeout: 30000,
+    maximumAge: 0,
+    description: 'Alta precisão com timeout estendido'
+  },
+  {
+    enableHighAccuracy: false,
+    timeout: 20000,
+    maximumAge: 30000,
+    description: 'Precisão padrão'
+  }
+];
+
 export const useLocation = () => {
   const [location, setLocation] = useState(null);
   const [error, setError] = useState(null);
   const [permissionStatus, setPermissionStatus] = useState('prompt');
+  const [currentStrategyIndex, setCurrentStrategyIndex] = useState(0);
+  const [locationPrecision, setLocationPrecision] = useState('buscando');
 
   // Verifica o status da permissão de geolocalização
   const checkPermissionStatus = async () => {
@@ -21,29 +45,68 @@ export const useLocation = () => {
     }
   };
 
-  // Fornece uma localização padrão quando a geolocalização falha
-  const fallbackLocation = () => {
-    // Coordenadas de Goiânia como localização padrão
-    const defaultLocation = {
-      latitude: -16.6799,
-      longitude: -49.2556,
-      accuracy: 1000, // Precisão baixa para indicar que é uma localização aproximada
-      isDefault: true // Flag para indicar que é uma localização padrão
-    };
+  // Solicita novamente a localização real com a próxima estratégia
+  const tryNextStrategy = () => {
+    const nextIndex = (currentStrategyIndex + 1) % LOCATION_STRATEGIES.length;
+    console.log(`Tentando estratégia ${nextIndex + 1}/${LOCATION_STRATEGIES.length}: ${LOCATION_STRATEGIES[nextIndex].description}`);
     
-    setLocation(defaultLocation);
-    console.log('Usando localização padrão:', defaultLocation);
+    setCurrentStrategyIndex(nextIndex);
+    
+    if (navigator.geolocation) {
+      const strategy = LOCATION_STRATEGIES[nextIndex];
+      
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const realLocation = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            isDefault: false
+          };
+          setLocation(realLocation);
+          setError(null);
+          
+          // Definir nível de precisão baseado na accuracy
+          if (position.coords.accuracy <= 10) {
+            setLocationPrecision('alta');
+          } else if (position.coords.accuracy <= 100) {
+            setLocationPrecision('média');
+          } else {
+            setLocationPrecision('baixa');
+          }
+          
+          console.log(`Localização obtida com estratégia ${nextIndex + 1}, precisão: ${position.coords.accuracy}m`);
+        },
+        (err) => {
+          console.error(`Falha na estratégia ${nextIndex + 1}:`, err);
+          
+          // Se ainda houver estratégias para tentar
+          if (nextIndex < LOCATION_STRATEGIES.length - 1) {
+            tryNextStrategy();
+          } else {
+            // Todas as estratégias falharam
+            setError('Não foi possível obter sua localização. Por favor, verifique suas configurações de GPS.');
+            setLocationPrecision('indisponível');
+          }
+        },
+        strategy
+      );
+    }
   };
 
   // Solicita permissão de geolocalização explicitamente
   const requestPermission = () => {
     if (navigator.geolocation) {
+      // Oculta o erro imediatamente quando o usuário clica no botão
+      setError(null);
+      
       navigator.geolocation.getCurrentPosition(
         () => {
           // Permissão concedida, atualizará automaticamente via watchPosition
           setError(null);
         },
         (err) => {
+          // Só mostra o erro se realmente falhar após a tentativa
           handleGeolocationError(err);
         }
       );
@@ -52,24 +115,60 @@ export const useLocation = () => {
 
   // Trata os erros de geolocalização com mensagens específicas
   const handleGeolocationError = (err) => {
-    console.error('Erro de geolocalização:', err);
+    // Para erros de timeout, tentar próxima estratégia
+    if (err.code === 3) { // TIMEOUT
+      console.log('Timeout ao obter localização, tentando próxima estratégia');
+      tryNextStrategy();
+      return;
+    }
+    
+    // Evita logar repetidamente o mesmo erro de permissão negada
+    if (err.code !== 1) {
+      console.error('Erro de geolocalização:', err);
+    }
     
     switch (err.code) {
       case 1: // PERMISSION_DENIED
-        setError('Permissão de localização negada. Por favor, habilite nas configurações do navegador.');
+        // Atualiza o status de permissão para evitar novas tentativas
+        setPermissionStatus('denied');
+        // Mostra o erro apenas uma vez
+        if (error === null) {
+          setError('Permissão de localização negada. Por favor, habilite nas configurações do navegador.');
+        }
+        setLocationPrecision('indisponível');
+        
+        // Usar localização padrão de Goiânia como fallback quando a permissão é negada
+        setLocation({
+          latitude: -16.6869,
+          longitude: -49.2648,
+          accuracy: 1000,
+          isDefault: true
+        });
         break;
       case 2: // POSITION_UNAVAILABLE
         setError('Localização indisponível. Verifique se o GPS está ativado.');
-        break;
-      case 3: // TIMEOUT
-        setError('Tempo esgotado ao obter localização. Verifique sua conexão.');
+        setLocationPrecision('indisponível');
+        
+        // Usar localização padrão quando a posição está indisponível
+        setLocation({
+          latitude: -16.6869,
+          longitude: -49.2648,
+          accuracy: 1000,
+          isDefault: true
+        });
         break;
       default:
         setError('Erro ao obter localização.');
+        setLocationPrecision('indisponível');
+        
+        // Usar localização padrão para qualquer outro erro
+        setLocation({
+          latitude: -16.6869,
+          longitude: -49.2648,
+          accuracy: 1000,
+          isDefault: true
+        });
     }
-    
-    // Usar localização padrão como fallback
-    fallbackLocation();
   };
 
   useEffect(() => {
@@ -82,20 +181,31 @@ export const useLocation = () => {
       try {
         if (!navigator.geolocation) {
           setError('Geolocalização não suportada neste navegador.');
-          fallbackLocation();
+          setLocationPrecision('indisponível');
           return;
         }
 
-        // Configurações para melhor precisão
-        const options = {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 1000
-        };
+        // Se a permissão já foi negada, não tenta novamente
+        if (permissionStatus === 'denied') {
+          // Usar localização padrão de Goiânia como fallback
+          setLocation({
+            latitude: -16.6869,
+            longitude: -49.2648,
+            accuracy: 1000,
+            isDefault: true
+          });
+          setLocationPrecision('baixa');
+          return;
+        }
 
-        // Monitorar posição continuamente
-        watchId = navigator.geolocation.watchPosition(
+        // Usar a primeira estratégia
+        const strategy = LOCATION_STRATEGIES[currentStrategyIndex];
+        console.log(`Iniciando com estratégia ${currentStrategyIndex + 1}/${LOCATION_STRATEGIES.length}: ${strategy.description}`);
+
+        // Solicita permissão explicitamente primeiro
+        navigator.geolocation.getCurrentPosition(
           (position) => {
+            // Localização inicial obtida com sucesso
             setLocation({
               latitude: position.coords.latitude,
               longitude: position.coords.longitude,
@@ -103,16 +213,61 @@ export const useLocation = () => {
               isDefault: false
             });
             setError(null);
+            
+            // Definir nível de precisão baseado na accuracy
+            if (position.coords.accuracy <= 10) {
+              setLocationPrecision('alta');
+            } else if (position.coords.accuracy <= 100) {
+              setLocationPrecision('média');
+            } else {
+              setLocationPrecision('baixa');
+            }
+            
+            console.log(`Localização inicial obtida, precisão: ${position.coords.accuracy}m`);
+            
+            // Agora inicia o monitoramento contínuo
+            startWatchPosition(strategy);
           },
           (err) => {
+            console.error('Erro ao obter localização inicial:', err);
             handleGeolocationError(err);
           },
-          options
+          strategy
         );
       } catch (err) {
         console.error('Erro ao configurar geolocalização:', err);
-        fallbackLocation();
+        tryNextStrategy();
       }
+    };
+    
+    // Função para iniciar o monitoramento contínuo
+    const startWatchPosition = (options) => {
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          setLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            isDefault: false
+          });
+          setError(null);
+          
+          // Atualizar nível de precisão baseado na accuracy
+          if (position.coords.accuracy <= 10) {
+            setLocationPrecision('alta');
+          } else if (position.coords.accuracy <= 100) {
+            setLocationPrecision('média');
+          } else {
+            setLocationPrecision('baixa');
+          }
+          
+          console.log(`Localização atualizada, precisão: ${position.coords.accuracy}m`);
+        },
+        (err) => {
+          handleGeolocationError(err);
+        },
+        options
+      );
     };
 
     getLocation();
@@ -122,13 +277,13 @@ export const useLocation = () => {
         navigator.geolocation.clearWatch(watchId);
       }
     };
-  }, []);
+  }, [currentStrategyIndex]);
 
   return { 
     location, 
     error, 
     permissionStatus,
     requestPermission,
-    isDefaultLocation: location?.isDefault || false
+    locationPrecision
   };
 };

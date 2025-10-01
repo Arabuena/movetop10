@@ -5,6 +5,16 @@ const useLocation = (enabled = true) => {
   const [location, setLocation] = useState(null);
   const [error, setError] = useState(null);
   const [permissionStatus, setPermissionStatus] = useState('prompt');
+  const [useDefaultLocation, setUseDefaultLocation] = useState(false);
+
+  // Localização padrão para Goiânia
+  const defaultLocation = {
+    lat: -16.6869,
+    lng: -49.2648,
+    accuracy: 1000,
+    timestamp: Date.now(),
+    isDefault: true
+  };
 
   const requestPermission = async () => {
     try {
@@ -22,6 +32,14 @@ const useLocation = (enabled = true) => {
     }
   };
 
+  // Função para continuar com localização padrão
+  const continueWithDefaultLocation = () => {
+    setUseDefaultLocation(true);
+    setLocation(defaultLocation);
+    setError(null);
+    logger.info('Usando localização padrão por escolha do usuário');
+  };
+
   useEffect(() => {
     requestPermission();
   }, []);
@@ -32,6 +50,13 @@ const useLocation = (enabled = true) => {
     const startWatching = () => {
       if (!navigator.geolocation) {
         setError('Geolocalização não suportada neste dispositivo');
+        setLocation(defaultLocation);
+        return;
+      }
+
+      // Se o usuário optou por usar localização padrão, não tenta obter localização real
+      if (useDefaultLocation) {
+        setLocation(defaultLocation);
         return;
       }
 
@@ -45,8 +70,14 @@ const useLocation = (enabled = true) => {
         interval: 3000, // milliseconds
       };
 
+      // Usar localização padrão imediatamente para evitar atrasos
+      setLocation(defaultLocation);
+      
       watchId = navigator.geolocation.watchPosition(
         (position) => {
+          // Se o usuário optou por usar localização padrão, ignora atualizações reais
+          if (useDefaultLocation) return;
+          
           const newLocation = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
@@ -61,25 +92,33 @@ const useLocation = (enabled = true) => {
         },
         (error) => {
           logger.error('Erro de geolocalização:', error);
+          
+          // Se o usuário já optou por usar localização padrão, não mostra erro
+          if (useDefaultLocation) return;
+          
           switch (error.code) {
             case error.PERMISSION_DENIED:
               setError('Permissão de localização negada. Por favor, habilite nas configurações.');
+              setLocation(defaultLocation);
               break;
             case error.POSITION_UNAVAILABLE:
               setError('Localização indisponível. Verifique se o GPS está ativado.');
+              setLocation(defaultLocation);
               break;
             case error.TIMEOUT:
               setError('Tempo esgotado ao obter localização. Verifique sua conexão.');
+              setLocation(defaultLocation);
               break;
             default:
               setError('Erro ao obter localização.');
+              setLocation(defaultLocation);
           }
         },
         options
       );
     };
 
-    if (enabled && permissionStatus !== 'denied') {
+    if (enabled && (permissionStatus !== 'denied' || useDefaultLocation)) {
       startWatching();
     }
 
@@ -88,14 +127,15 @@ const useLocation = (enabled = true) => {
         navigator.geolocation.clearWatch(watchId);
       }
     };
-  }, [enabled, permissionStatus]);
+  }, [enabled, permissionStatus, useDefaultLocation]);
 
   return { 
     location, 
     error,
     permissionStatus,
-    requestPermission 
+    requestPermission,
+    continueWithDefaultLocation
   };
 };
 
-export default useLocation; 
+export default useLocation;

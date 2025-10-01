@@ -29,43 +29,51 @@ const useDriverStatus = () => {
     };
   }, [socket]);
 
-  const toggleStatus = useCallback(async () => {
+  const toggleStatus = useCallback(() => {
     if (!socket || !connected || isUpdating) {
       logger.warn('Não é possível alterar status:', { socket: !!socket, connected, isUpdating });
-      return;
+      return Promise.resolve({ success: false, error: 'Socket não conectado' });
     }
 
     try {
       setIsUpdating(true);
       setError(null);
 
+      // Atualizar o estado imediatamente para feedback instantâneo ao usuário
       const newStatus = !isOnline;
+      setIsOnline(newStatus);
+      
       logger.debug('Alterando status para:', newStatus ? 'online' : 'offline');
 
-      return new Promise((resolve, reject) => {
-        socket.emit('driver:updateStatus', { 
-          status: newStatus ? 'online' : 'offline' 
-        }, (response) => {
-          if (response.error) {
-            setError(response.error);
-            reject(new Error(response.error));
-          } else {
-            setIsOnline(newStatus);
-            resolve(response);
-          }
-          setIsUpdating(false);
-        });
-
-        // Timeout de segurança
-        setTimeout(() => {
-          setIsUpdating(false);
-          reject(new Error('Timeout ao atualizar status'));
-        }, 5000);
+      // Emitir evento sem esperar callback
+      socket.emit('driver:updateStatus', { 
+        status: newStatus ? 'online' : 'offline' 
+      }, (response) => {
+        // Processar resposta apenas para logging
+        if (response && response.success) {
+          logger.debug('Status confirmado pelo servidor:', response);
+        } else {
+          const errorMsg = response?.error || 'Erro ao atualizar status';
+          logger.warn('Erro na resposta do servidor, mas mantendo estado local:', errorMsg);
+          setError(errorMsg);
+        }
+        setIsUpdating(false);
       });
+      
+      // Finalizar o estado de atualização após um tempo, mesmo sem resposta
+      setTimeout(() => {
+        if (isUpdating) {
+          logger.warn('Finalizando estado de atualização após timeout');
+          setIsUpdating(false);
+        }
+      }, 2000);
+      
+      return Promise.resolve({ success: true, status: newStatus ? 'online' : 'offline' });
     } catch (err) {
       setError(err.message);
       setIsUpdating(false);
-      throw err;
+      logger.error('Erro ao processar alteração de status:', err);
+      return Promise.resolve({ success: false, error: err.message });
     }
   }, [socket, connected, isOnline, isUpdating]);
 
@@ -77,4 +85,4 @@ const useDriverStatus = () => {
   };
 };
 
-export default useDriverStatus; 
+export default useDriverStatus;

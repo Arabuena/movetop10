@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { GoogleMap, Marker } from '@react-google-maps/api';
+import React, { useState, useEffect, useCallback } from 'react';
+import { GoogleMap, Marker, DirectionsRenderer } from '@react-google-maps/api';
 import { MapPinIcon } from '@heroicons/react/24/outline';
 import PlacesAutocomplete from '../../../components/PlacesAutocomplete';
 import { useLocation } from '../../../hooks/useLocation';
@@ -8,7 +8,8 @@ import LocationError from '../../../components/common/LocationError';
 const SelectDestination = ({ onConfirm, onBack }) => {
   const [origin, setOrigin] = useState(null);
   const [destination, setDestination] = useState(null);
-  const { location, error: locationError, permissionStatus, requestPermission, isDefaultLocation } = useLocation();
+  const [directions, setDirections] = useState(null);
+  const { location, error: locationError, permissionStatus, requestPermission, locationPrecision } = useLocation();
 
   // Usa o hook useLocation para obter a localização atual
   useEffect(() => {
@@ -16,10 +17,33 @@ const SelectDestination = ({ onConfirm, onBack }) => {
       setOrigin({
         lat: location.latitude,
         lng: location.longitude,
-        address: isDefaultLocation ? 'Localização aproximada' : ''
+        address: ''
       });
     }
-  }, [location, isDefaultLocation]);
+  }, [location]);
+
+  // Calcula a rota quando origem ou destino mudam
+  const calculateRoute = useCallback(async () => {
+    if (!origin || !destination || !window.google) return;
+
+    try {
+      const directionsService = new window.google.maps.DirectionsService();
+      const result = await directionsService.route({
+        origin: new window.google.maps.LatLng(origin.lat, origin.lng),
+        destination: new window.google.maps.LatLng(destination.lat, destination.lng),
+        travelMode: window.google.maps.TravelMode.DRIVING,
+      });
+
+      setDirections(result);
+    } catch (error) {
+      console.error('Erro ao calcular rota:', error);
+    }
+  }, [origin, destination]);
+
+  // Atualiza a rota quando origem ou destino mudam
+  useEffect(() => {
+    calculateRoute();
+  }, [origin, destination, calculateRoute]);
 
   const handleOriginChange = (location) => {
     setOrigin(location);
@@ -61,6 +85,13 @@ const SelectDestination = ({ onConfirm, onBack }) => {
               icon="https://maps.google.com/mapfiles/ms/icons/green-dot.png"
             />
           )}
+          {directions && <DirectionsRenderer directions={directions} options={{
+            polylineOptions: {
+              strokeColor: "#4285F4",
+              strokeWeight: 5,
+              strokeOpacity: 0.8
+            }
+          }} />}
         </GoogleMap>
       </div>
 
@@ -70,7 +101,31 @@ const SelectDestination = ({ onConfirm, onBack }) => {
 
         {/* Origem */}
         <div>
-          <label className="text-sm text-gray-600">Origem</label>
+          <div className="flex justify-between items-center">
+            <label className="text-sm text-gray-600">Origem</label>
+            {locationPrecision && (
+              <div className="flex items-center">
+                <span className="text-xs mr-1">Precisão:</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                  locationPrecision === 'alta' 
+                    ? 'bg-green-100 text-green-800' 
+                    : locationPrecision === 'média'
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : locationPrecision === 'baixa'
+                    ? 'bg-orange-100 text-orange-800'
+                    : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {locationPrecision === 'alta' 
+                    ? 'Alta' 
+                    : locationPrecision === 'média'
+                    ? 'Média'
+                    : locationPrecision === 'baixa'
+                    ? 'Baixa'
+                    : 'Buscando...'}
+                </span>
+              </div>
+            )}
+          </div>
           <div className="relative mt-1">
             <div className="absolute inset-y-0 left-3 flex items-center">
               <MapPinIcon className="h-5 w-5 text-gray-400" />

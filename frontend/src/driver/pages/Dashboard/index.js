@@ -9,7 +9,7 @@ import logger from '../../../utils/logger';
 const Dashboard = () => {
   const { 
     isOnline, 
-    toggleOnlineStatus, 
+    toggleStatus, 
     currentLocation,
     currentRide,
     stats 
@@ -22,7 +22,7 @@ const Dashboard = () => {
         <div className="flex justify-between items-center">
           <StatusToggle 
             isOnline={isOnline} 
-            onToggle={toggleOnlineStatus} 
+            onToggle={toggleStatus} 
           />
           <Stats data={stats} />
         </div>
@@ -55,4 +55,4 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard; 
+export default Dashboard;

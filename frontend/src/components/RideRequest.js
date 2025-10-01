@@ -5,12 +5,14 @@ import { useSocket } from '../../contexts/SocketContext'; // Ajuste o caminho de
 import { toast } from 'react-hot-toast';
 import SelectDestination from './SelectDestination';
 import SelectCategory from './SelectCategory';
+import SelectPayment from '../pages/passenger/RideRequest/SelectPayment';
 import ConfirmRide from './ConfirmRide';
 import { calculateRideEstimates } from '../../utils/rideCalculator'; // Ajuste o caminho de importação conforme necessário
 
 const STEPS = {
   SELECT_DESTINATION: 'select_destination',
   SELECT_CATEGORY: 'select_category',
+  SELECT_PAYMENT: 'select_payment',
   CONFIRM_RIDE: 'confirm_ride'
 };
 
@@ -22,7 +24,8 @@ const RideRequest = () => {
     origin: null,
     destination: null,
     category: null,
-    estimates: null
+    estimates: null,
+    paymentMethod: 'cash'
   });
 
   const handleDestinationSelect = async (data) => {
@@ -48,6 +51,14 @@ const RideRequest = () => {
       ...prev,
       category
     }));
+    setCurrentStep(STEPS.SELECT_PAYMENT);
+  };
+
+  const handlePaymentSelect = (paymentMethod) => {
+    setRideData(prev => ({
+      ...prev,
+      paymentMethod
+    }));
     setCurrentStep(STEPS.CONFIRM_RIDE);
   };
 
@@ -71,7 +82,7 @@ const RideRequest = () => {
         price: rideData.estimates.prices[rideData.category.id],
         distance: rideData.estimates.distance.value,
         duration: rideData.estimates.duration.value,
-        paymentMethod: 'cash'
+        paymentMethod: rideData.paymentMethod
       };
 
       const ride = await requestRide(rideRequest);
@@ -90,8 +101,11 @@ const RideRequest = () => {
       case STEPS.SELECT_CATEGORY:
         setCurrentStep(STEPS.SELECT_DESTINATION);
         break;
-      case STEPS.CONFIRM_RIDE:
+      case STEPS.SELECT_PAYMENT:
         setCurrentStep(STEPS.SELECT_CATEGORY);
+        break;
+      case STEPS.CONFIRM_RIDE:
+        setCurrentStep(STEPS.SELECT_PAYMENT);
         break;
       default:
         navigate('/passenger');
@@ -116,6 +130,14 @@ const RideRequest = () => {
             onBack={handleBack}
           />
         );
+        
+      case STEPS.SELECT_PAYMENT:
+        return (
+          <SelectPayment
+            onConfirm={handlePaymentSelect}
+            onBack={handleBack}
+          />
+        );
 
       case STEPS.CONFIRM_RIDE:
         return (
@@ -134,24 +156,8 @@ const RideRequest = () => {
   return (
     <div className="h-screen bg-move-gray"> {/* Usando a cor 'move-gray' do Tailwind */}
       {renderStep()}
-      <div className="flex justify-between p-4">
-        <button
-          onClick={handleBack}
-          className="px-6 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400"
-          // 🔧 Classe do botão 'Voltar' atualizada para:
-          // bg-blue-500 text-white hover:bg-blue-600 focus:ring-blue-400
-        >
-          Voltar
-        </button>
-        <button
-          onClick={handleConfirmRide}
-          className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400"
-          // 🔧 Classe do botão 'Confirmar' atualizada para:
-          // bg-green-500 text-white hover:bg-green-600 focus:ring-green-400
-        >
-          Confirmar
-        </button>
-      </div>
+      {/* Removendo os botões fixos da parte inferior para evitar confusão no fluxo de navegação */}
+      {/* Cada componente de etapa agora gerencia seus próprios botões de navegação */}
     </div>
   );
 };

@@ -117,8 +117,16 @@ const RideTracking = () => {
     if (!socket || !ride) return;
 
     const handleDriverLocation = ({ location }) => {
-      setDriverLocation(location);
+      console.log('Nova localização do motorista recebida:', location);
+      if (location && location.lat && location.lng) {
+        setDriverLocation(location);
+      }
     };
+
+    // Solicitar localização atual do motorista
+    if (ride.driver && ride.status !== 'completed' && ride.status !== 'cancelled') {
+      socket.emit('passenger:requestDriverLocation', { rideId: ride._id });
+    }
 
     socket.on('driver:location', handleDriverLocation);
 
@@ -133,15 +141,21 @@ const RideTracking = () => {
     const calculateRoute = async () => {
       const directionsService = new window.google.maps.DirectionsService();
       try {
-        // Se motorista está indo buscar, mostrar rota até origem
-        // Se em viagem, mostrar rota até destino
+        // Se o status for 'accepted', o motorista está indo buscar o passageiro
+        // Se o status for 'in_progress', o motorista está levando o passageiro ao destino
         const destination = ride.status === 'in_progress' 
-          ? ride.destination 
-          : ride.origin;
+          ? { lat: ride.destination.lat, lng: ride.destination.lng } 
+          : { lat: ride.origin.lat, lng: ride.origin.lng };
+
+        console.log('Calculando rota:', {
+          origem: driverLocation,
+          destino: destination,
+          status: ride.status
+        });
 
         const result = await directionsService.route({
           origin: driverLocation,
-          destination,
+          destination: destination,
           travelMode: window.google.maps.TravelMode.DRIVING,
         });
 
@@ -220,9 +234,10 @@ const RideTracking = () => {
       <div className="flex-1">
         <GoogleMap
           mapContainerStyle={{ width: '100%', height: '100%' }}
-          center={driverLocation || ride?.origin}
+          center={driverLocation || (ride?.origin && { lat: ride.origin.lat, lng: ride.origin.lng })}
           zoom={15}
         >
+          {/* Marcador do motorista */}
           {driverLocation && (
             <Marker
               position={driverLocation}
@@ -232,11 +247,45 @@ const RideTracking = () => {
               }}
             />
           )}
-          {directions && <DirectionsRenderer directions={directions} />}
+          
+          {/* Marcador da origem (posição do passageiro) */}
+          {ride?.origin && ride.status !== 'in_progress' && (
+            <Marker
+              position={{ lat: ride.origin.lat, lng: ride.origin.lng }}
+              icon={{
+                url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+                scaledSize: new window.google.maps.Size(32, 32)
+              }}
+            />
+          )}
+          
+          {/* Marcador do destino */}
+          {ride?.destination && (
+            <Marker
+              position={{ lat: ride.destination.lat, lng: ride.destination.lng }}
+              icon={{
+                url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
+                scaledSize: new window.google.maps.Size(32, 32)
+              }}
+            />
+          )}
+          
+          {/* Renderização da rota */}
+          {directions && (
+            <DirectionsRenderer
+              directions={directions}
+              options={{
+                polylineOptions: {
+                  strokeColor: ride?.status === 'in_progress' ? '#4CAF50' : '#2196F3',
+                  strokeWeight: 5
+                }
+              }}
+            />
+          )}
         </GoogleMap>
       </div>
     </div>
   );
 };
 
-export default RideTracking; 
+export default RideTracking;

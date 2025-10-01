@@ -17,9 +17,12 @@ const DriverLogin = () => {
 
     try {
       const phoneInput = e.target.phone;
+      // Garantir que o telefone esteja apenas com números
       const phone = phoneInput.rawValue || phoneInput.value.replace(/\D/g, '');
       const password = e.target.password.value;
 
+      console.log('Tentando login com:', { phone, userType: 'driver' });
+      
       await login(phone, 'driver', password);
       toast.success('Login realizado com sucesso!');
       navigate('/driver');
@@ -97,4 +100,4 @@ const DriverLogin = () => {
   );
 };
 
-export default DriverLogin; 
+export default DriverLogin;

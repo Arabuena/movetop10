@@ -76,7 +76,12 @@ const ConfirmRide = ({ rideData, onConfirm, onBack }) => {
             <CreditCardIcon className="h-5 w-5 text-gray-400" />
             <div>
               <p className="text-gray-900">Forma de pagamento</p>
-              <p className="text-sm text-gray-500">Dinheiro</p>
+              <p className="text-sm text-gray-500">
+                {rideData.paymentMethod === 'cash' && 'Dinheiro'}
+                {rideData.paymentMethod === 'credit_card' && 'Cartão de Crédito'}
+                {rideData.paymentMethod === 'debit_card' && 'Cartão de Débito'}
+                {rideData.paymentMethod === 'pix' && 'PIX'}
+              </p>
             </div>
           </div>
 

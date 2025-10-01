@@ -9,7 +9,7 @@ const DriverContext = createContext({});
 export const DriverProvider = ({ children }) => {
   const { user } = useAuth();
   const { socket, connected } = useSocket();
-  const { location, error: locationError } = useLocation();
+  const { location, error: locationError, continueWithDefaultLocation } = useLocation();
   
   // Estados
   const [isOnline, setIsOnline] = useState(false);
@@ -219,7 +219,8 @@ export const DriverProvider = ({ children }) => {
     toggleStatus,
     acceptRide,
     rejectRide,
-    completeRide
+    completeRide,
+    continueWithDefaultLocation
   };
 
   return (
@@ -237,4 +238,4 @@ export const useDriver = () => {
   return context;
 };
 
-export default DriverContext; 
+export default DriverContext;

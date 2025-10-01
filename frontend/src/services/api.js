@@ -14,6 +14,12 @@ const api = axios.create({
   baseURL
 });
 
+// Configurar o token no axios para todas as requisições
+const token = localStorage.getItem('token');
+if (token) {
+  api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+}
+
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -26,8 +32,8 @@ api.interceptors.response.use(
   response => response,
   error => {
     console.error('API Error:', {
-      url: error.config.url,
-      method: error.config.method,
+      url: error.config?.url,
+      method: error.config?.method,
       status: error.response?.status,
       data: error.response?.data
     });
@@ -51,23 +57,20 @@ async function makeRequest(method, endpoint, data) {
       method,
       url,
       data,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      }
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
     });
+    
     return response.data;
   } catch (error) {
-    console.error('API Error:', {
-      message: error.message,
-      endpoint,
-      response: error.response?.data,
-      status: error.response?.status,
-      url: error.config?.url,
-      apiUrl: API_URL // Add this for debugging
-    });
+    console.error(`Error in ${method.toUpperCase()} ${endpoint}:`, error);
     throw error;
   }
 }
 
-export { makeRequest };
+// Exportar funções auxiliares
+export const apiHelpers = {
+  get: (endpoint) => makeRequest('get', endpoint),
+  post: (endpoint, data) => makeRequest('post', endpoint, data),
+  put: (endpoint, data) => makeRequest('put', endpoint, data),
+  delete: (endpoint) => makeRequest('delete', endpoint)
+};

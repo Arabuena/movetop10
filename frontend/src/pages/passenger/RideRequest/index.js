@@ -1,107 +1,197 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../../../contexts/SocketContext';
 import { toast } from 'react-hot-toast';
-import SelectDestination from './SelectDestination';
+import SelectDestination from '../RideRequest/SelectDestination';
 import SelectCategory from './SelectCategory';
+import SelectPayment from './SelectPayment';
 import ConfirmRide from './ConfirmRide';
 import { calculateRideEstimates } from '../../../utils/rideCalculator';
 
 const STEPS = {
+  ORIGIN: 'origin',
   SELECT_DESTINATION: 'select_destination',
   SELECT_CATEGORY: 'select_category',
-  CONFIRM_RIDE: 'confirm_ride'
+  SELECT_PAYMENT: 'select_payment',
+  CONFIRM_RIDE: 'confirm_ride',
+  WAITING_DRIVER: 'waiting_driver'
 };
 
 const RideRequest = () => {
   const navigate = useNavigate();
-  const { requestRide } = useSocket();
-  const [currentStep, setCurrentStep] = useState(STEPS.SELECT_DESTINATION);
-  const [rideData, setRideData] = useState({
-    origin: null,
-    destination: null,
-    category: null,
-    estimates: null
-  });
+  const { requestRide, socket } = useSocket();
+  
+  const [step, setStep] = useState(STEPS.ORIGIN);
+  const [origin, setOrigin] = useState(null);
+  const [destination, setDestination] = useState(null);
+  const [estimates, setEstimates] = useState(null);
+  const [category, setCategory] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [ride, setRide] = useState(null);
+  const [error, setError] = useState(null);
+  const [waitingTime, setWaitingTime] = useState(0);
+  const [noDriversFound, setNoDriversFound] = useState(false);
+
+  // Efeito para monitorar o tempo de espera quando estiver procurando motorista
+  useEffect(() => {
+    let interval;
+    if (step === STEPS.WAITING_DRIVER && !noDriversFound) {
+      interval = setInterval(() => {
+        setWaitingTime(prev => {
+          const newTime = prev + 1;
+          // Após 30 segundos, considerar que não há motoristas disponíveis
+          if (newTime >= 30) {
+            setNoDriversFound(true);
+            clearInterval(interval);
+          }
+          return newTime;
+        });
+      }, 1000);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [step, noDriversFound]);
+
+  // Ouvir eventos de aceitação de corrida
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleRideAccepted = (response) => {
+      console.log('Corrida aceita pelo motorista:', response);
+      if (response && response.ride) {
+        toast.success('Um motorista aceitou sua corrida!');
+        // Redirecionar para a tela de acompanhamento
+        navigate(`/passenger/rides/${response.ride._id}`);
+      }
+    };
+
+    socket.on('ride:accepted', handleRideAccepted);
+    socket.on('passenger:rideAccepted', handleRideAccepted);
+
+    return () => {
+      socket.off('ride:accepted', handleRideAccepted);
+      socket.off('passenger:rideAccepted', handleRideAccepted);
+    };
+  }, [socket, navigate]);
 
   const handleDestinationSelect = async (data) => {
     try {
       // Calcular estimativas
       const estimates = await calculateRideEstimates(data.origin, data.destination);
       
-      setRideData(prev => ({
-        ...prev,
-        origin: data.origin,
-        destination: data.destination,
-        estimates
-      }));
+      setOrigin(data.origin);
+      setDestination(data.destination);
+      setEstimates(estimates);
       
-      setCurrentStep(STEPS.SELECT_CATEGORY);
+      setStep(STEPS.SELECT_CATEGORY);
     } catch (error) {
       console.error('Erro ao calcular estimativas:', error);
       toast.error('Erro ao calcular valor da corrida');
     }
   };
 
-  const handleCategorySelect = (category) => {
-    setRideData(prev => ({
-      ...prev,
-      category
-    }));
-    setCurrentStep(STEPS.CONFIRM_RIDE);
+  const handleCategorySelect = (selectedCategory) => {
+    setCategory(selectedCategory);
+    setStep(STEPS.SELECT_PAYMENT);
+  };
+  
+  const handlePaymentSelect = (method) => {
+    setPaymentMethod(method);
+    setStep(STEPS.CONFIRM_RIDE);
   };
 
-  const handleConfirmRide = async () => {
+  const handleRequestRide = async () => {
     try {
-      toast.loading('Procurando motoristas próximos...', {
-        id: 'searching-drivers'
-      });
+      toast.loading('Buscando motoristas próximos...', { id: 'searching-drivers' });
+      
+      // Validar dados antes de enviar
+      if (!origin || !destination || !estimates || !category) {
+        toast.dismiss('searching-drivers');
+        toast.error('Dados incompletos. Verifique o endereço de origem e destino.');
+        return;
+      }
 
       const rideRequest = {
         origin: {
-          lat: rideData.origin.lat,
-          lng: rideData.origin.lng,
-          address: rideData.origin.address
+          lat: Number(origin.lat),
+          lng: Number(origin.lng),
+          address: origin.address || ''
         },
         destination: {
-          lat: rideData.destination.lat,
-          lng: rideData.destination.lng,
-          address: rideData.destination.address
+          lat: Number(destination.lat),
+          lng: Number(destination.lng),
+          address: destination.address || ''
         },
-        price: rideData.estimates.prices[rideData.category.id],
-        distance: rideData.estimates.distance.value, // valor em metros
-        duration: rideData.estimates.duration.value, // valor em segundos
-        paymentMethod: 'cash' // ou poderia vir de uma seleção do usuário
+        price: Number(estimates.prices[category.id]),
+        distance: Number(estimates.distance.value),
+        duration: Number(estimates.duration.value),
+        paymentMethod: paymentMethod || 'cash'
       };
 
-      const ride = await requestRide(rideRequest);
+      const response = await requestRide(rideRequest);
       
       toast.dismiss('searching-drivers');
-      toast.success('Corrida solicitada com sucesso!');
       
-      // Socket irá redirecionar quando um motorista aceitar
+      if (!response || !response.ride) {
+        toast.error('Não foi possível criar a corrida. Tente novamente.');
+        return;
+      }
+      
+      toast.success('Corrida solicitada com sucesso!');
+      console.log('Resposta da solicitação de corrida:', response);
+      
+      // Atualizar o estado para mostrar a tela de espera
+      setRide(response.ride);
+      setStep(STEPS.WAITING_DRIVER);
     } catch (error) {
       console.error('Erro ao solicitar corrida:', error);
       toast.dismiss('searching-drivers');
-      toast.error('Erro ao solicitar corrida. Tente novamente.');
+      toast.error(`Erro ao solicitar corrida: ${error.message || 'Tente novamente.'}`);
     }
   };
 
   const handleBack = () => {
-    switch (currentStep) {
+    switch (step) {
       case STEPS.SELECT_CATEGORY:
-        setCurrentStep(STEPS.SELECT_DESTINATION);
+        setStep(STEPS.SELECT_DESTINATION);
+        break;
+      case STEPS.SELECT_PAYMENT:
+        setStep(STEPS.SELECT_CATEGORY);
         break;
       case STEPS.CONFIRM_RIDE:
-        setCurrentStep(STEPS.SELECT_CATEGORY);
+        setStep(STEPS.SELECT_PAYMENT);
         break;
       default:
         navigate('/passenger');
     }
   };
 
+  // Função para cancelar a corrida
+  const handleCancelRide = async () => {
+    try {
+      if (socket && ride?._id) {
+        socket.emit('passenger:cancelRide', { rideId: ride._id }, (response) => {
+          if (response.success) {
+            toast.success('Corrida cancelada com sucesso');
+          } else {
+            toast.error('Erro ao cancelar corrida: ' + (response.error || 'Tente novamente'));
+          }
+          navigate('/passenger');
+        });
+      } else {
+        navigate('/passenger');
+      }
+    } catch (error) {
+      console.error('Erro ao cancelar corrida:', error);
+      navigate('/passenger');
+    }
+  };
+
   const renderStep = () => {
-    switch (currentStep) {
+    switch (step) {
+      case STEPS.ORIGIN:
       case STEPS.SELECT_DESTINATION:
         return (
           <SelectDestination
@@ -113,8 +203,16 @@ const RideRequest = () => {
       case STEPS.SELECT_CATEGORY:
         return (
           <SelectCategory
-            estimates={rideData.estimates}
+            estimates={estimates}
             onSelect={handleCategorySelect}
+            onBack={handleBack}
+          />
+        );
+      
+      case STEPS.SELECT_PAYMENT:
+        return (
+          <SelectPayment
+            onConfirm={handlePaymentSelect}
             onBack={handleBack}
           />
         );
@@ -122,9 +220,24 @@ const RideRequest = () => {
       case STEPS.CONFIRM_RIDE:
         return (
           <ConfirmRide
-            rideData={rideData}
-            onConfirm={handleConfirmRide}
+            origin={origin}
+            destination={destination}
+            estimates={estimates}
+            category={category}
+            paymentMethod={paymentMethod}
+            onConfirm={handleRequestRide}
             onBack={handleBack}
+          />
+        );
+      
+      case STEPS.WAITING_DRIVER:
+        return (
+          <WaitingDriver 
+            ride={ride} 
+            waitingTime={waitingTime}
+            noDriversFound={noDriversFound}
+            onCancel={handleCancelRide}
+            onBack={() => navigate('/passenger')}
           />
         );
       
@@ -140,4 +253,68 @@ const RideRequest = () => {
   );
 };
 
-export default RideRequest; 
+// Componente para mostrar enquanto aguarda um motorista aceitar a corrida
+const WaitingDriver = ({ ride, waitingTime, noDriversFound, onCancel, onBack }) => {
+  return (
+    <div className="flex flex-col items-center justify-center h-full bg-white p-4">
+      <div className="animate-pulse mb-4">
+        <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+      </div>
+      
+      {noDriversFound ? (
+        <>
+          <h2 className="text-xl font-semibold mb-2 text-orange-500">Nenhum motorista encontrado</h2>
+          <p className="text-gray-600 text-center mb-4">
+            Não encontramos motoristas disponíveis no momento. Tente novamente mais tarde.
+          </p>
+        </>
+      ) : (
+        <>
+          <h2 className="text-xl font-semibold mb-2">Procurando motorista...</h2>
+          <p className="text-gray-600 text-center mb-4">
+            Aguarde enquanto encontramos um motorista próximo para sua corrida
+          </p>
+        </>
+      )}
+      
+      <div className="w-full max-w-md bg-gray-100 p-4 rounded-lg">
+        <div className="flex justify-between mb-2">
+          <span className="text-gray-600">Origem:</span>
+          <span className="font-medium">{ride?.origin?.address}</span>
+        </div>
+        <div className="flex justify-between mb-2">
+          <span className="text-gray-600">Destino:</span>
+          <span className="font-medium">{ride?.destination?.address}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600">Tempo de espera:</span>
+          <span className="font-medium">{Math.floor(waitingTime / 60)}:{(waitingTime % 60).toString().padStart(2, '0')}</span>
+        </div>
+      </div>
+      
+      <div className="mt-4 flex space-x-4">
+        <button
+          onClick={onCancel}
+          className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+        >
+          Cancelar
+        </button>
+        
+        {noDriversFound && (
+          <button
+            onClick={onBack}
+            className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+          >
+            Voltar
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default RideRequest;

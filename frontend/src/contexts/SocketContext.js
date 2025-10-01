@@ -21,10 +21,13 @@ export const SocketProvider = ({ children }) => {
     }
 
     if (!socketRef.current) {
-      socketRef.current = io(process.env.REACT_APP_API_URL || 'http://localhost:3001', {
+      // Usando a URL correta do backend definida no .env.development
+      socketRef.current = io(process.env.REACT_APP_API_URL, {
         transports: ['websocket', 'polling'],
         reconnection: true,
-        reconnectionAttempts: 5,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 1000,
+        timeout: 20000,
         auth: {
           token: user.token
         }
@@ -59,15 +62,26 @@ export const SocketProvider = ({ children }) => {
       throw new Error('Socket não está conectado');
     }
 
+    // Validar dados antes de enviar
+    if (!rideData.origin || !rideData.destination || !rideData.price || !rideData.distance || !rideData.duration) {
+      throw new Error('Dados de corrida incompletos');
+    }
+
     return new Promise((resolve, reject) => {
       logger.debug('Solicitando corrida:', rideData);
 
       const timeout = setTimeout(() => {
         reject(new Error('Tempo esgotado ao solicitar corrida'));
-      }, 10000);
+      }, 15000); // Aumentado para 15 segundos
 
       socketRef.current.emit('passenger:requestRide', rideData, (response) => {
         clearTimeout(timeout);
+        
+        if (!response) {
+          logger.error('Resposta vazia do servidor');
+          reject(new Error('Resposta vazia do servidor'));
+          return;
+        }
         
         if (response.error) {
           logger.error('Erro na solicitação:', response.error);
@@ -101,4 +115,4 @@ export const useSocket = () => {
   return context;
 };
 
-export default SocketContext; 
+export default SocketContext;
