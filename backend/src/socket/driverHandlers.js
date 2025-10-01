@@ -120,11 +120,44 @@ const handleAcceptRide = async (socket, { rideId }, callback, { getSocketByUserI
   }
 };
 
+// Handler para receber solicitação de corrida
+const handleRideRequest = async (socket, ride, callback) => {
+  try {
+    console.log(`Motorista ${socket.userId} recebeu solicitação de corrida ${ride._id}`);
+    
+    // Verificar se o motorista está disponível
+    const driver = await User.findById(socket.userId);
+    if (!driver || driver.status !== 'online') {
+      console.log(`Motorista ${socket.userId} não está disponível para receber corridas`);
+      return;
+    }
+    
+    // Emitir evento para o frontend do motorista mostrar o botão de aceitar
+    socket.emit('driver:newRideAvailable', { ride });
+    
+    if (callback) {
+      callback({
+        success: true
+      });
+    }
+  } catch (error) {
+    console.error('Erro ao processar solicitação de corrida:', error);
+    if (callback) {
+      callback({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+};
+
 // Registrar handlers
 const driverHandlers = {
   'driver:acceptRide': handleAcceptRide,
   'driver:getActiveRide': handleGetActiveRide,
   'driver:updateStatus': handleUpdateStatus,
+  'driver:rideRequest': handleRideRequest,
+  'driver:newRideAvailable': handleRideRequest  // Adicionando um alias para garantir que o evento seja capturado
   // ... outros handlers ...
 };
 

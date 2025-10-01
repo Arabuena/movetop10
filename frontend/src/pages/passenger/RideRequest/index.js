@@ -63,7 +63,15 @@ const RideRequest = () => {
       if (response && response.ride) {
         toast.success('Um motorista aceitou sua corrida!');
         // Redirecionar para a tela de acompanhamento
-        navigate(`/passenger/rides/${response.ride._id}`);
+        const rideId = response.ride._id || response.ride.id;
+        if (rideId) {
+          navigate(`/passenger/rides/${rideId}`);
+        } else {
+          console.error('ID da corrida não encontrado na resposta:', response);
+          toast.error('Erro ao processar corrida aceita. Tente novamente.');
+        }
+      } else {
+        console.error('Dados da corrida incompletos na resposta:', response);
       }
     };
 

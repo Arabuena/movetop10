@@ -13,9 +13,16 @@ const RideRequest = ({ ride }) => {
     
     setIsLoading(true);
     try {
-      logger.debug('Tentando aceitar corrida:', ride._id);
+      // Garantir que temos um ID válido da corrida
+      const rideId = ride._id || (ride.id ? ride.id : null);
+      
+      if (!rideId) {
+        throw new Error('ID da corrida não encontrado');
+      }
+      
+      logger.debug('Tentando aceitar corrida:', rideId);
       await toast.promise(
-        acceptRide(ride._id),
+        acceptRide(rideId),
         {
           loading: 'Aceitando corrida...',
           success: 'Corrida aceita com sucesso!',
@@ -89,4 +96,4 @@ const RideRequest = ({ ride }) => {
   );
 };
 
-export default RideRequest; 
+export default RideRequest;

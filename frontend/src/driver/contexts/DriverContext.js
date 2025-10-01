@@ -34,29 +34,35 @@ export const DriverProvider = ({ children }) => {
       setIsUpdating(true);
       setStatusError(null);
 
+      // Atualizar o estado imediatamente para feedback instantâneo ao usuário
       const newStatus = !isOnline;
+      setIsOnline(newStatus);
       logger.debug('Alterando status para:', newStatus ? 'online' : 'offline');
 
-      return new Promise((resolve, reject) => {
-        socket.emit('driver:updateStatus', { 
-          status: newStatus ? 'online' : 'offline' 
-        }, (response) => {
-          if (response.error) {
-            setStatusError(response.error);
-            reject(new Error(response.error));
-          } else {
-            setIsOnline(newStatus);
-            resolve(response);
-          }
-          setIsUpdating(false);
-        });
-
-        // Timeout de segurança
-        setTimeout(() => {
-          setIsUpdating(false);
-          reject(new Error('Timeout ao atualizar status'));
-        }, 5000);
+      // Emitir evento sem depender do callback para atualizar o estado
+      socket.emit('driver:updateStatus', { 
+        status: newStatus ? 'online' : 'offline' 
+      }, (response) => {
+        // Processar resposta apenas para logging e tratamento de erros
+        if (response.error) {
+          logger.warn('Erro na resposta do servidor:', response.error);
+          setStatusError(response.error);
+          // Não revertemos o estado para manter a abordagem otimista
+        } else {
+          logger.debug('Status confirmado pelo servidor:', response);
+        }
+        setIsUpdating(false);
       });
+      
+      // Finalizar o estado de atualização após um tempo, mesmo sem resposta
+      setTimeout(() => {
+        if (isUpdating) {
+          logger.warn('Finalizando estado de atualização após timeout');
+          setIsUpdating(false);
+        }
+      }, 2000);
+      
+      return Promise.resolve({ success: true, status: newStatus ? 'online' : 'offline' });
     } catch (err) {
       setStatusError(err.message);
       setIsUpdating(false);
@@ -100,9 +106,25 @@ export const DriverProvider = ({ children }) => {
   useEffect(() => {
     if (!socket) return;
 
+    // Remover listeners anteriores para evitar duplicação
+    socket.off('driver:rideRequest');
+    socket.off('driver:newRideAvailable');
+    socket.off('driver:rideAccepted');
+    socket.off('driver:rideUpdated');
+    socket.off('driver:rideCancelled');
+    socket.off('driver:rideCompleted');
+    socket.off('driver:statsUpdated');
+
     socket.on('driver:rideRequest', (ride) => {
       logger.debug('Nova solicitação de corrida:', ride);
       setCurrentRide(ride);
+    });
+
+    socket.on('driver:newRideAvailable', (data) => {
+      logger.debug('Nova corrida disponível:', data);
+      if (data && data.ride) {
+        setCurrentRide(data.ride);
+      }
     });
 
     socket.on('driver:rideAccepted', (ride) => {
@@ -130,15 +152,21 @@ export const DriverProvider = ({ children }) => {
       setStats(newStats);
     });
 
+    // Evento para testar a conexão
+    socket.emit('test:ping', { message: 'Teste de conexão do motorista' }, (response) => {
+      logger.debug('Resposta do ping:', response);
+    });
+
     return () => {
       socket.off('driver:rideRequest');
+      socket.off('driver:newRideAvailable');
       socket.off('driver:rideAccepted');
       socket.off('driver:rideUpdated');
       socket.off('driver:rideCancelled');
       socket.off('driver:rideCompleted');
       socket.off('driver:statsUpdated');
     };
-  }, [socket]);
+  }, [socket, logger]);
 
   // Enviar localização quando online
   useEffect(() => {

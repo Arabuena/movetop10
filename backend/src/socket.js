@@ -24,6 +24,7 @@ const setupSocket = (server) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       socket.userId = decoded.id;
       socket.userType = decoded.userType;
+      console.log(`Usuário autenticado: ${socket.userId}, tipo: ${socket.userType}`);
       next();
     } catch (error) {
       next(new Error('Authentication error'));
@@ -34,20 +35,42 @@ const setupSocket = (server) => {
   const userSockets = new Map();
 
   io.on('connection', (socket) => {
-    console.log('Novo cliente conectado:', socket.userId);
-    userSockets.set(socket.userId, socket);
+    console.log(`Novo cliente conectado: ${socket.userId} (${socket.userType})`);
+    
+    // Garantir que o userId seja uma string para consistência
+    const userId = String(socket.userId);
+    userSockets.set(userId, socket);
+    
+    console.log(`Total de usuários conectados: ${userSockets.size}`);
+    console.log(`IDs de usuários conectados: ${Array.from(userSockets.keys()).join(', ')}`);
 
     // Registrar handlers do motorista
     Object.entries(driverHandlers).forEach(([event, handler]) => {
       socket.on(event, (data, callback = () => {}) => {
-        handler(socket, data, callback, { getSocketByUserId: (userId) => userSockets.get(userId) });
+        console.log(`Evento recebido (${socket.userType}): ${event}`);
+        handler(socket, data, callback, { 
+          getSocketByUserId: (userId) => {
+            const userIdStr = String(userId);
+            const userSocket = userSockets.get(userIdStr);
+            console.log(`Buscando socket para usuário ${userIdStr}: ${userSocket ? 'encontrado' : 'não encontrado'}`);
+            return userSocket;
+          } 
+        });
       });
     });
 
     // Registrar handlers do passageiro
     Object.entries(passengerHandlers).forEach(([event, handler]) => {
       socket.on(event, (data, callback = () => {}) => {
-        handler(socket, data, callback, { getSocketByUserId: (userId) => userSockets.get(userId) });
+        console.log(`Evento recebido (${socket.userType}): ${event}`);
+        handler(socket, data, callback, { 
+          getSocketByUserId: (userId) => {
+            const userIdStr = String(userId);
+            const userSocket = userSockets.get(userIdStr);
+            console.log(`Buscando socket para usuário ${userIdStr}: ${userSocket ? 'encontrado' : 'não encontrado'}`);
+            return userSocket;
+          } 
+        });
       });
     });
 
@@ -74,7 +97,10 @@ const setupSocket = (server) => {
         if (ride.driver) {
           const driverSocket = userSockets.get(ride.driver.toString());
           if (driverSocket && driverSocket.connected) {
+            console.log(`Notificando motorista ${ride.driver} sobre cancelamento da corrida ${ride._id}`);
             driverSocket.emit('driver:rideCancelled', { ride });
+          } else {
+            console.log(`Socket do motorista ${ride.driver} não encontrado ou não conectado`);
           }
         }
         
@@ -85,14 +111,27 @@ const setupSocket = (server) => {
       }
     });
 
+    // Evento para testar a comunicação
+    socket.on('test:ping', (data, callback) => {
+      console.log(`Ping recebido de ${socket.userId} (${socket.userType}): ${JSON.stringify(data)}`);
+      callback({ success: true, message: 'Pong!', timestamp: new Date().toISOString() });
+    });
+
     socket.on('disconnect', () => {
-      console.log('Cliente desconectado:', socket.userId);
-      userSockets.delete(socket.userId);
+      console.log(`Cliente desconectado: ${socket.userId} (${socket.userType})`);
+      const userId = String(socket.userId);
+      userSockets.delete(userId);
+      console.log(`Total de usuários conectados após desconexão: ${userSockets.size}`);
     });
   });
 
   // Função auxiliar para encontrar socket pelo userId
-  const getSocketByUserId = (userId) => userSockets.get(userId);
+  const getSocketByUserId = (userId) => {
+    const userIdStr = String(userId);
+    const userSocket = userSockets.get(userIdStr);
+    console.log(`Buscando socket para usuário ${userIdStr}: ${userSocket ? 'encontrado' : 'não encontrado'}`);
+    return userSocket;
+  };
 
   return { io, getSocketByUserId };
 };

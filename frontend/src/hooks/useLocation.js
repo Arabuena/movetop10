@@ -116,9 +116,25 @@ export const useLocation = () => {
   // Trata os erros de geolocalização com mensagens específicas
   const handleGeolocationError = (err) => {
     // Para erros de timeout, tentar próxima estratégia
-    if (err.code === 3) { // TIMEOUT
+    if (err && err.code === 3) { // TIMEOUT
       console.log('Timeout ao obter localização, tentando próxima estratégia');
       tryNextStrategy();
+      return;
+    }
+    
+    // Verifica se o erro é um objeto válido antes de acessar propriedades
+    if (!err || typeof err !== 'object' || !err.code) {
+      console.error('Erro de geolocalização desconhecido:', err || 'Erro vazio');
+      setError('Erro ao obter localização. Verifique suas configurações de GPS.');
+      setLocationPrecision('indisponível');
+      
+      // Usar localização padrão para erro desconhecido
+      setLocation({
+        latitude: -16.6869,
+        longitude: -49.2648,
+        accuracy: 1000,
+        isDefault: true
+      });
       return;
     }
     
