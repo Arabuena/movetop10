@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../../../contexts/SocketContext';
 import { toast } from 'react-hot-toast';
-import SelectDestination from '../RideRequest/SelectDestination';
+import SelectDestination from './SelectDestination';
 import SelectCategory from './SelectCategory';
 import SelectPayment from './SelectPayment';
 import ConfirmRide from './ConfirmRide';
