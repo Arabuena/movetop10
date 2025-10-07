@@ -9,8 +9,9 @@ const useLocation = (enabled = true) => {
 
   // Localização padrão para Goiânia
   const defaultLocation = {
-    lat: -16.6869,
-    lng: -49.2648,
+    // Adicionar pequena variação aleatória para simular posições diferentes em testes
+    lat: -16.6869 + (Math.random() - 0.5) * 0.01, // ~500m de variação
+    lng: -49.2648 + (Math.random() - 0.5) * 0.01,
     accuracy: 1000,
     timestamp: Date.now(),
     isDefault: true

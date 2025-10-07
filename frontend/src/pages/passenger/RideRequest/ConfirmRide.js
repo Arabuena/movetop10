@@ -17,20 +17,15 @@ const Button = ({ children, onClick, type = 'button', ariaLabel }) => (
   </button>
 );
 
-const ConfirmRide = ({ rideData, onConfirm, onBack }) => {
-  if (
-    !rideData ||
-    !rideData.origin ||
-    !rideData.destination ||
-    !rideData.category ||
-    !rideData.estimates ||
-    !rideData.estimates.prices
-  ) {
+const ConfirmRide = ({ origin, destination, category, estimates, paymentMethod, onConfirm, onBack }) => {
+  // Validação mais robusta dos dados
+  if (!origin || !destination || !category || !estimates) {
     return <div className="p-4">Carregando detalhes da corrida...</div>;
   }
 
-  const { origin, destination, category, estimates } = rideData;
-  const price = estimates.prices[category.id];
+  // Verificar se estimates tem a estrutura esperada
+  const prices = estimates.prices || {};
+  const price = prices[category?.id] || estimates.price || 0;
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
@@ -77,10 +72,10 @@ const ConfirmRide = ({ rideData, onConfirm, onBack }) => {
             <div>
               <p className="text-gray-900">Forma de pagamento</p>
               <p className="text-sm text-gray-500">
-                {rideData.paymentMethod === 'cash' && 'Dinheiro'}
-                {rideData.paymentMethod === 'credit_card' && 'Cartão de Crédito'}
-                {rideData.paymentMethod === 'debit_card' && 'Cartão de Débito'}
-                {rideData.paymentMethod === 'pix' && 'PIX'}
+                {paymentMethod === 'cash' && 'Dinheiro'}
+                {paymentMethod === 'credit_card' && 'Cartão de Crédito'}
+                {paymentMethod === 'debit_card' && 'Cartão de Débito'}
+                {paymentMethod === 'pix' && 'PIX'}
               </p>
             </div>
           </div>

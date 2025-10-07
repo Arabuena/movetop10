@@ -33,33 +33,51 @@ const setupSocket = (server) => {
   const userSockets = new Map();
 
   io.on('connection', (socket) => {
-    console.log('Novo cliente conectado:', socket.userId);
+    console.log('Usuário autenticado:', socket.userId, ', tipo:', socket.userType);
+    console.log('Novo cliente conectado:', socket.userId, '(' + socket.userType + ')');
+    console.log('Total de usuários conectados:', userSockets.size + 1);
+    
     userSockets.set(socket.userId, socket);
+    
+    // Log dos IDs conectados
+    const connectedIds = Array.from(userSockets.keys());
+    console.log('IDs de usuários conectados:', connectedIds);
+
+    // Função auxiliar para encontrar socket pelo userId
+    const getSocketByUserId = (userId) => userSockets.get(userId);
 
     // Registrar handlers do motorista
     Object.entries(driverHandlers).forEach(([event, handler]) => {
       socket.on(event, (data, callback) => {
-        handler(socket, data, callback || (() => {}));
+        console.log(`Evento recebido (${socket.userType}): ${event}`);
+        handler(socket, data, callback || (() => {}), { getSocketByUserId });
       });
     });
 
     // Registrar handlers do passageiro
     Object.entries(passengerHandlers).forEach(([event, handler]) => {
       socket.on(event, (data, callback) => {
-        handler(socket, data, callback || (() => {}));
+        console.log(`Evento recebido (${socket.userType}): ${event}`);
+        handler(socket, data, callback || (() => {}), { getSocketByUserId });
       });
     });
 
+    // Handler para teste de ping
+    socket.on('test:ping', (data, callback) => {
+      console.log(`Ping recebido de ${socket.userId} (${socket.userType}):`, data);
+      if (callback) {
+        callback({ success: true, message: 'Pong!' });
+      }
+    });
+
     socket.on('disconnect', () => {
-      console.log('Cliente desconectado:', socket.userId);
+      console.log('Cliente desconectado:', socket.userId, '(' + socket.userType + ')');
       userSockets.delete(socket.userId);
+      console.log('Total de usuários conectados após desconexão:', userSockets.size);
     });
   });
 
-  // Função auxiliar para encontrar socket pelo userId
-  const getSocketByUserId = (userId) => userSockets.get(userId);
-
-  return { io, getSocketByUserId };
+  return { io, getSocketByUserId: (userId) => userSockets.get(userId) };
 };
 
-module.exports = { setupSocket }; 
+module.exports = { setupSocket };

@@ -113,6 +113,9 @@ export const useLocation = () => {
     }
   };
 
+  // Função para adicionar pequena variação aleatória para simular posições diferentes em testes
+  const randomVariation = () => (Math.random() - 0.5) * 0.01; // ~500m de variação
+
   // Trata os erros de geolocalização com mensagens específicas
   const handleGeolocationError = (err) => {
     // Para erros de timeout, tentar próxima estratégia
@@ -129,9 +132,10 @@ export const useLocation = () => {
       setLocationPrecision('indisponível');
       
       // Usar localização padrão para erro desconhecido
+      // Adicionar pequena variação aleatória para simular posições diferentes em testes
       setLocation({
-        latitude: -16.6869,
-        longitude: -49.2648,
+        latitude: -16.6869 + randomVariation(),
+        longitude: -49.2648 + randomVariation(),
         accuracy: 1000,
         isDefault: true
       });
@@ -154,9 +158,10 @@ export const useLocation = () => {
         setLocationPrecision('indisponível');
         
         // Usar localização padrão de Goiânia como fallback quando a permissão é negada
+        // Adicionar pequena variação aleatória para simular posições diferentes em testes
         setLocation({
-          latitude: -16.6869,
-          longitude: -49.2648,
+          latitude: -16.6869 + randomVariation(),
+          longitude: -49.2648 + randomVariation(),
           accuracy: 1000,
           isDefault: true
         });
@@ -166,9 +171,10 @@ export const useLocation = () => {
         setLocationPrecision('indisponível');
         
         // Usar localização padrão quando a posição está indisponível
+        // Adicionar pequena variação aleatória para simular posições diferentes em testes
         setLocation({
-          latitude: -16.6869,
-          longitude: -49.2648,
+          latitude: -16.6869 + randomVariation(),
+          longitude: -49.2648 + randomVariation(),
           accuracy: 1000,
           isDefault: true
         });
@@ -178,9 +184,10 @@ export const useLocation = () => {
         setLocationPrecision('indisponível');
         
         // Usar localização padrão para qualquer outro erro
+        // Adicionar pequena variação aleatória para simular posições diferentes em testes
         setLocation({
-          latitude: -16.6869,
-          longitude: -49.2648,
+          latitude: -16.6869 + randomVariation(),
+          longitude: -49.2648 + randomVariation(),
           accuracy: 1000,
           isDefault: true
         });
@@ -196,21 +203,33 @@ export const useLocation = () => {
     const getLocation = async () => {
       try {
         if (!navigator.geolocation) {
-          setError('Geolocalização não suportada neste navegador.');
-          setLocationPrecision('indisponível');
+          setError('Geolocalização não é suportada por este navegador. Usando localização padrão.');
+          setLocationPrecision('baixa');
+          
+          // Usar localização padrão quando a geolocalização não é suportada
+          // Adicionar pequena variação aleatória para simular posições diferentes em testes
+          setLocation({
+            latitude: -16.6869 + randomVariation(),
+            longitude: -49.2648 + randomVariation(),
+            accuracy: 1000,
+            isDefault: true
+          });
           return;
         }
 
         // Se a permissão já foi negada, não tenta novamente
         if (permissionStatus === 'denied') {
-          // Usar localização padrão de Goiânia como fallback
+          setError('Permissão de localização negada. Usando localização padrão.');
+          setLocationPrecision('baixa');
+          
+          // Usar localização padrão quando a permissão já foi negada
+          // Adicionar pequena variação aleatória para simular posições diferentes em testes
           setLocation({
-            latitude: -16.6869,
-            longitude: -49.2648,
+            latitude: -16.6869 + randomVariation(),
+            longitude: -49.2648 + randomVariation(),
             accuracy: 1000,
             isDefault: true
           });
-          setLocationPrecision('baixa');
           return;
         }
 

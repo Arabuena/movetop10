@@ -28,6 +28,7 @@ const AuthController = {
       const phone = normalizePhone(req.body.phone);
       const { userType } = req.body;
       
+      // Buscar usuário APENAS com o telefone e userType específicos
       const user = await User.findOne({ phone, userType });
       console.log('🔍 Busca de usuário:', {
         encontrado: !!user,
@@ -38,6 +39,24 @@ const AuthController = {
       });
       
       if (!user) {
+        // Verificar se existe usuário com o mesmo telefone mas userType diferente
+        const userWithDifferentType = await User.findOne({ phone });
+        if (userWithDifferentType) {
+          const existingType = userWithDifferentType.userType === 'driver' ? 'motorista' : 'passageiro';
+          const requestedType = userType === 'driver' ? 'motorista' : 'passageiro';
+          
+          console.log('❌ Login falhou: Telefone cadastrado como tipo diferente', {
+            phone,
+            existingType: userWithDifferentType.userType,
+            requestedType: userType,
+            timestamp: new Date().toISOString()
+          });
+          
+          return res.status(401).json({ 
+            error: `Este telefone está cadastrado como ${existingType}. Para acessar como ${requestedType}, use um telefone diferente.`
+          });
+        }
+        
         console.log('❌ Login falhou: Usuário não encontrado', {
           phone,
           phoneOriginal: req.body.phone,
@@ -106,24 +125,28 @@ const AuthController = {
       });
 
       // Verificar se usuário já existe com o telefone normalizado
-      const existingUser = await User.findOne({
-        $or: [
-          { phone: normalizedData.phone },
-          { email: normalizedData.email }
-        ]
-      });
+      const existingUserByPhone = await User.findOne({ phone: normalizedData.phone });
+      const existingUserByEmail = await User.findOne({ email: normalizedData.email });
 
-      if (existingUser) {
-        const duplicateField = 
-          existingUser.phone === normalizedData.phone ? 'phone' : 'email';
-        
-        console.log('❌ Registro falhou: Usuário já existe', {
-          field: duplicateField,
-          value: normalizedData[duplicateField],
+      if (existingUserByPhone) {
+        console.log('❌ Registro falhou: Telefone já cadastrado', {
+          phone: normalizedData.phone,
+          existingUserType: existingUserByPhone.userType,
+          newUserType: normalizedData.userType,
           timestamp: new Date().toISOString()
         });
         return res.status(400).json({ 
-          error: `${duplicateField === 'phone' ? 'Telefone' : 'Email'} já cadastrado` 
+          error: `Este telefone já está cadastrado como ${existingUserByPhone.userType === 'driver' ? 'motorista' : 'passageiro'}. Um telefone não pode ser usado para ambos os tipos de usuário.`
+        });
+      }
+
+      if (existingUserByEmail) {
+        console.log('❌ Registro falhou: Email já cadastrado', {
+          email: normalizedData.email,
+          timestamp: new Date().toISOString()
+        });
+        return res.status(400).json({ 
+          error: 'Email já cadastrado'
         });
       }
 
@@ -181,4 +204,4 @@ const AuthController = {
   }
 };
 
-module.exports = AuthController; 
+module.exports = AuthController;

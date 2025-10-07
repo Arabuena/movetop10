@@ -1,18 +1,9 @@
-const socketIO = require('socket.io');
 const Ride = require('./models/Ride');
 const driverHandlers = require('./socket/driverHandlers');
 const passengerHandlers = require('./socket/passengerHandlers');
 const jwt = require('jsonwebtoken');
 
-const setupSocket = (server) => {
-  const io = socketIO(server, {
-    cors: {
-      origin: process.env.FRONTEND_URL || "http://localhost:3000",
-      methods: ["GET", "POST"]
-    },
-    pingTimeout: 60000,
-  });
-
+const setupSocket = (io) => {
   // Middleware de autenticação
   io.use((socket, next) => {
     try {
@@ -109,6 +100,18 @@ const setupSocket = (server) => {
         console.error('Erro ao cancelar corrida:', error);
         callback({ error: error.message });
       }
+    });
+
+    // Handler para evento authenticate (compatibilidade com frontend)
+    socket.on('authenticate', (data) => {
+      console.log(`Evento authenticate recebido de ${socket.userId} (${socket.userType}):`, data);
+      // Emitir confirmação de autenticação
+      socket.emit('authenticated', {
+        success: true,
+        userId: socket.userId,
+        userType: socket.userType,
+        message: 'Usuário autenticado com sucesso'
+      });
     });
 
     // Evento para testar a comunicação

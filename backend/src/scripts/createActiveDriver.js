@@ -38,9 +38,10 @@ async function createActiveDriver() {
         isApproved: true,
         status: 'online', // Definindo o status como online (ativo)
         location: {
-          type: 'Point',
-          coordinates: [-49.2648, -16.6869] // Coordenadas de Goiânia
-        },
+        type: 'Point',
+        // Adicionar pequena variação aleatória para simular posições diferentes em testes
+        coordinates: [-49.2648 + (Math.random() - 0.5) * 0.01, -16.6869 + (Math.random() - 0.5) * 0.01] // Coordenadas de Goiânia com variação
+      },
         password: hashedPassword
       });
       
@@ -54,7 +55,8 @@ async function createActiveDriver() {
       existingDriver.status = 'online';
       existingDriver.location = {
         type: 'Point',
-        coordinates: [-49.2648, -16.6869] // Coordenadas de Goiânia
+        // Adicionar pequena variação aleatória para simular posições diferentes em testes
+        coordinates: [-49.2648 + (Math.random() - 0.5) * 0.01, -16.6869 + (Math.random() - 0.5) * 0.01] // Coordenadas de Goiânia com variação
       };
       await existingDriver.save();
       

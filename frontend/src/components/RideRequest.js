@@ -79,6 +79,7 @@ const RideRequest = () => {
           lng: rideData.destination.lng,
           address: rideData.destination.address
         },
+        carType: rideData.category.id,
         price: rideData.estimates.prices[rideData.category.id],
         distance: rideData.estimates.distance.value,
         duration: rideData.estimates.duration.value,

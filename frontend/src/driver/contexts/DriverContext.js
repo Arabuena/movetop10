@@ -25,7 +25,15 @@ export const DriverProvider = ({ children }) => {
 
   // Toggle status do motorista
   const toggleStatus = useCallback(async () => {
+    console.log('DriverContext: toggleStatus chamado', { 
+      socket: !!socket, 
+      connected, 
+      isUpdating,
+      isOnline 
+    });
+    
     if (!socket || !connected || isUpdating) {
+      console.warn('DriverContext: Não é possível alterar status:', { socket: !!socket, connected, isUpdating });
       logger.warn('Não é possível alterar status:', { socket: !!socket, connected, isUpdating });
       return;
     }
@@ -37,18 +45,22 @@ export const DriverProvider = ({ children }) => {
       // Atualizar o estado imediatamente para feedback instantâneo ao usuário
       const newStatus = !isOnline;
       setIsOnline(newStatus);
+      console.log('DriverContext: Alterando status para:', newStatus ? 'online' : 'offline');
       logger.debug('Alterando status para:', newStatus ? 'online' : 'offline');
 
       // Emitir evento sem depender do callback para atualizar o estado
       socket.emit('driver:updateStatus', { 
         status: newStatus ? 'online' : 'offline' 
       }, (response) => {
+        console.log('DriverContext: Resposta do servidor:', response);
         // Processar resposta apenas para logging e tratamento de erros
         if (response.error) {
+          console.warn('DriverContext: Erro na resposta do servidor:', response.error);
           logger.warn('Erro na resposta do servidor:', response.error);
           setStatusError(response.error);
           // Não revertemos o estado para manter a abordagem otimista
         } else {
+          console.log('DriverContext: Status confirmado pelo servidor:', response);
           logger.debug('Status confirmado pelo servidor:', response);
         }
         setIsUpdating(false);
@@ -57,6 +69,7 @@ export const DriverProvider = ({ children }) => {
       // Finalizar o estado de atualização após um tempo, mesmo sem resposta
       setTimeout(() => {
         if (isUpdating) {
+          console.warn('DriverContext: Finalizando estado de atualização após timeout');
           logger.warn('Finalizando estado de atualização após timeout');
           setIsUpdating(false);
         }
@@ -64,6 +77,7 @@ export const DriverProvider = ({ children }) => {
       
       return Promise.resolve({ success: true, status: newStatus ? 'online' : 'offline' });
     } catch (err) {
+      console.error('DriverContext: Erro ao alterar status:', err);
       setStatusError(err.message);
       setIsUpdating(false);
       throw err;
@@ -106,6 +120,10 @@ export const DriverProvider = ({ children }) => {
   useEffect(() => {
     if (!socket) return;
 
+    console.log('🔌 [DRIVER CONTEXT] Configurando listeners de socket...');
+    console.log('🔌 [DRIVER CONTEXT] Socket conectado:', !!socket);
+    console.log('🔌 [DRIVER CONTEXT] Status online:', isOnline);
+
     // Remover listeners anteriores para evitar duplicação
     socket.off('driver:rideRequest');
     socket.off('driver:newRideAvailable');
@@ -116,14 +134,26 @@ export const DriverProvider = ({ children }) => {
     socket.off('driver:statsUpdated');
 
     socket.on('driver:rideRequest', (ride) => {
+      console.log('🚗 [DRIVER CONTEXT] Nova solicitação de corrida recebida:', ride);
+      console.log('🚗 [DRIVER CONTEXT] Status da corrida:', ride?.status);
+      console.log('🚗 [DRIVER CONTEXT] Motorista está online?', isOnline);
       logger.debug('Nova solicitação de corrida:', ride);
       setCurrentRide(ride);
+      console.log('🚗 [DRIVER CONTEXT] currentRide atualizado para:', ride);
     });
 
     socket.on('driver:newRideAvailable', (data) => {
+      console.log('🆕 [DRIVER CONTEXT] Nova corrida disponível:', data);
+      console.log('🆕 [DRIVER CONTEXT] Status da corrida:', data?.status);
+      console.log('🆕 [DRIVER CONTEXT] Motorista está online?', isOnline);
       logger.debug('Nova corrida disponível:', data);
       if (data && data.ride) {
         setCurrentRide(data.ride);
+        console.log('🆕 [DRIVER CONTEXT] currentRide atualizado para (data.ride):', data.ride);
+      } else if (data && data.rideId) {
+        // Se os dados vêm diretamente sem wrapper 'ride'
+        setCurrentRide(data);
+        console.log('🆕 [DRIVER CONTEXT] currentRide atualizado para (data):', data);
       }
     });
 
@@ -235,6 +265,37 @@ export const DriverProvider = ({ children }) => {
     }
   };
 
+  const cancelRide = useCallback(async (rideId) => {
+    if (!socket || !connected) {
+      throw new Error('Socket não está conectado');
+    }
+
+    try {
+      logger.debug('Tentando cancelar corrida:', rideId);
+      
+      return new Promise((resolve, reject) => {
+        socket.emit('driver:cancelRide', { rideId }, (response) => {
+          if (response && response.success) {
+            logger.debug('Corrida cancelada com sucesso');
+            setCurrentRide(null);
+            resolve();
+          } else {
+            logger.error('Erro ao cancelar corrida:', response?.error);
+            reject(new Error(response?.error || 'Erro ao cancelar corrida'));
+          }
+        });
+
+        // Timeout de 10 segundos
+        setTimeout(() => {
+          reject(new Error('Tempo esgotado ao cancelar corrida'));
+        }, 10000);
+      });
+    } catch (error) {
+      logger.error('Erro ao cancelar corrida:', error);
+      throw error;
+    }
+  }, [socket, connected]);
+
   const value = {
     user,
     isOnline,
@@ -248,7 +309,7 @@ export const DriverProvider = ({ children }) => {
     acceptRide,
     rejectRide,
     completeRide,
-    continueWithDefaultLocation
+    cancelRide
   };
 
   return (

@@ -45,63 +45,63 @@ function App() {
     >
       <AuthProvider>
         <SocketProvider>
-          <DriverProvider>
-            <Routes>
-              <Route path="/" element={<Navigate to="/login/passenger" replace />} />
-              
-              <Route path="/login/:userType" element={
-                <PublicOnlyRoute>
-                  <AuthLayout />
-                </PublicOnlyRoute>
-              }>
-                <Route index element={<Login />} />
-              </Route>
+          <Routes>
+            <Route path="/" element={<Navigate to="/login/passenger" replace />} />
+            
+            <Route path="/login/:userType" element={
+              <PublicOnlyRoute>
+                <AuthLayout />
+              </PublicOnlyRoute>
+            }>
+              <Route index element={<Login />} />
+            </Route>
 
-              <Route path="/register/:userType" element={
-                <PublicOnlyRoute>
-                  <AuthLayout />
-                </PublicOnlyRoute>
-              }>
-                <Route index element={<Register />} />
-              </Route>
+            <Route path="/register/:userType" element={
+              <PublicOnlyRoute>
+                <AuthLayout />
+              </PublicOnlyRoute>
+            }>
+              <Route index element={<Register />} />
+            </Route>
 
-              <Route path="/passenger/*" element={
-                <PrivateRoute>
-                  <PassengerLayout />
-                </PrivateRoute>
-              }>
-                <Route index element={<RideRequest />} />
-                <Route path="rides" element={<PassengerRides />} />
-                <Route path="rides/:rideId" element={<RideTracking />} />
-                <Route path="profile" element={<PassengerProfile />} />
-              </Route>
+            <Route path="/passenger/*" element={
+              <PrivateRoute>
+                <PassengerLayout />
+              </PrivateRoute>
+            }>
+              <Route index element={<RideRequest />} />
+              <Route path="rides" element={<PassengerRides />} />
+              <Route path="rides/:rideId" element={<RideTracking />} />
+              <Route path="profile" element={<PassengerProfile />} />
+            </Route>
 
-              <Route path="/driver/*" element={
-                <PrivateRoute>
+            <Route path="/driver/*" element={
+              <PrivateRoute>
+                <DriverProvider>
                   <DriverLayout />
-                </PrivateRoute>
-              }>
-                <Route index element={<DriverHome />} />
-                <Route path="rides" element={<DriverRides />} />
-                <Route path="earnings" element={<DriverEarnings />} />
-              </Route>
-            </Routes>
-            <ToastContainer />
-            <Toaster
-              position="top-right"
-              toastOptions={{
-                duration: 4000,
-                style: {
-                  background: '#363636',
-                  color: '#fff',
-                }
-              }}
-            />
-          </DriverProvider>
+                </DriverProvider>
+              </PrivateRoute>
+            }>
+              <Route index element={<DriverHome />} />
+              <Route path="rides" element={<DriverRides />} />
+              <Route path="earnings" element={<DriverEarnings />} />
+            </Route>
+          </Routes>
+          <ToastContainer />
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#363636',
+                color: '#fff',
+              }
+            }}
+          />
         </SocketProvider>
       </AuthProvider>
     </LoadScript>
   );
 }
 
-export default React.memo(App); 
+export default React.memo(App);

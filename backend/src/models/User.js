@@ -44,6 +44,14 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  isOnline: {
+    type: Boolean,
+    default: false
+  },
+  isAvailable: {
+    type: Boolean,
+    default: false
+  },
   location: {
     type: {
       type: String,
@@ -78,4 +86,4 @@ userSchema.pre('save', async function(next) {
   }
 });
 
-module.exports = mongoose.model('User', userSchema); 
+module.exports = mongoose.model('User', userSchema);

@@ -34,10 +34,17 @@ const handleUpdateStatus = async (socket, { status }, callback) => {
       throw new Error('Status inválido');
     }
     
+    // Definir os campos a serem atualizados
+    const updateFields = {
+      status,
+      isOnline: status === 'online',
+      isAvailable: status === 'online'
+    };
+    
     // Atualizar o status do motorista no banco de dados
     const driver = await User.findByIdAndUpdate(
       socket.userId,
-      { $set: { status } },
+      { $set: updateFields },
       { new: true }
     );
     
@@ -51,10 +58,12 @@ const handleUpdateStatus = async (socket, { status }, callback) => {
     // Responder ao cliente
     callback({
       success: true,
-      status: driver.status
+      status: driver.status,
+      isOnline: driver.isOnline,
+      isAvailable: driver.isAvailable
     });
     
-    console.log(`Status do motorista ${socket.userId} atualizado para ${status}`);
+    console.log(`Status do motorista ${socket.userId} atualizado para ${status} (isOnline: ${updateFields.isOnline}, isAvailable: ${updateFields.isAvailable})`);
   } catch (error) {
     console.error('Erro ao atualizar status:', error);
     socket.emit('driver:statusError', { message: error.message });
@@ -151,12 +160,113 @@ const handleRideRequest = async (socket, ride, callback) => {
   }
 };
 
+// Handler para cancelar corrida pelo motorista
+const handleCancelRide = async (socket, { rideId }, callback, { getSocketByUserId }) => {
+  try {
+    console.log(`Motorista ${socket.userId} cancelando corrida ${rideId}`);
+    
+    const ride = await Ride.findById(rideId);
+    if (!ride) {
+      throw new Error('Corrida não encontrada');
+    }
+    
+    // Verificar se o motorista é o responsável pela corrida
+    if (ride.driver && ride.driver.toString() !== socket.userId) {
+      throw new Error('Você não tem permissão para cancelar esta corrida');
+    }
+    
+    // Atualizar status da corrida
+    ride.status = 'cancelled';
+    ride.cancelledBy = 'driver';
+    ride.cancellationReason = 'Cancelada pelo motorista';
+    await ride.save();
+    
+    // Atualizar status do motorista para disponível
+    const driver = await User.findById(socket.userId);
+    if (driver) {
+      driver.status = 'online';
+      driver.isAvailable = true;
+      await driver.save();
+    }
+    
+    // Notificar o passageiro
+    const passengerSocket = getSocketByUserId(ride.passenger.toString());
+    if (passengerSocket && passengerSocket.connected) {
+      console.log(`Notificando passageiro ${ride.passenger} sobre cancelamento da corrida ${ride._id}`);
+      passengerSocket.emit('passenger:rideCancelled', { 
+        ride, 
+        reason: 'Cancelada pelo motorista',
+        cancelledBy: 'driver'
+      });
+      passengerSocket.emit('ride:cancelled', { 
+        ride, 
+        reason: 'Cancelada pelo motorista',
+        cancelledBy: 'driver'
+      });
+    } else {
+      console.log(`Socket do passageiro ${ride.passenger} não encontrado ou não conectado`);
+    }
+    
+    callback({ success: true });
+  } catch (error) {
+    console.error('Erro ao cancelar corrida:', error);
+    callback({ error: error.message });
+  }
+};
+
+// Handler para atualizar localização do motorista
+const handleUpdateLocation = async (socket, location, callback, { getSocketByUserId }) => {
+  try {
+    console.log(`Atualizando localização do motorista ${socket.userId}:`, location);
+    
+    // Validar dados de localização
+    if (!location || !location.lat || !location.lng) {
+      throw new Error('Dados de localização inválidos');
+    }
+    
+    // Atualizar localização no banco de dados
+    await User.findByIdAndUpdate(socket.userId, {
+      location: {
+        type: 'Point',
+        coordinates: [location.lng, location.lat]
+      },
+      lastLocationUpdate: new Date()
+    });
+    
+    // Buscar corrida ativa do motorista
+    const activeRide = await Ride.findOne({
+      driver: socket.userId,
+      status: { $in: ['accepted', 'in_progress'] }
+    });
+    
+    // Se há corrida ativa, notificar o passageiro sobre a nova localização
+    if (activeRide) {
+      const passengerSocket = getSocketByUserId(activeRide.passenger.toString());
+      if (passengerSocket && passengerSocket.connected) {
+        console.log(`Enviando localização do motorista para passageiro ${activeRide.passenger}`);
+        passengerSocket.emit('driver:location', { location });
+      }
+    }
+    
+    if (callback) {
+      callback({ success: true });
+    }
+  } catch (error) {
+    console.error('Erro ao atualizar localização do motorista:', error);
+    if (callback) {
+      callback({ error: error.message });
+    }
+  }
+};
+
 // Registrar handlers
 const driverHandlers = {
   'driver:acceptRide': handleAcceptRide,
   'driver:getActiveRide': handleGetActiveRide,
   'driver:updateStatus': handleUpdateStatus,
   'driver:rideRequest': handleRideRequest,
+  'driver:cancelRide': handleCancelRide,
+  'driver:updateLocation': handleUpdateLocation,
   'driver:newRideAvailable': handleRideRequest  // Adicionando um alias para garantir que o evento seja capturado
   // ... outros handlers ...
 };

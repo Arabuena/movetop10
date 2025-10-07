@@ -98,15 +98,7 @@ const DriverHome = () => {
         />
       )}
 
-      {/* Botão de debug em desenvolvimento */}
-      {process.env.NODE_ENV !== 'production' && (
-        <button 
-          onClick={() => logger.showLogsInUI()}
-          className="fixed bottom-4 right-4 bg-gray-800 text-white p-2 rounded"
-        >
-          Debug Logs
-        </button>
-      )}
+
     </div>
   );
 };

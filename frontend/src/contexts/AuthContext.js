@@ -17,11 +17,19 @@ export const AuthProvider = ({ children }) => {
   const login = async (phone, userType, password) => {
     try {
       console.log('AuthContext: Iniciando login', { phone, userType });
+      console.log('AuthContext: API baseURL:', api.defaults.baseURL);
+      console.log('AuthContext: Fazendo requisição para /auth/login');
       
       const response = await api.post('/auth/login', {
         phone,
         userType,
         password
+      });
+
+      console.log('AuthContext: Resposta recebida:', {
+        status: response.status,
+        hasToken: !!response.data.token,
+        hasUser: !!response.data.user
       });
 
       const { token, user } = response.data;
@@ -43,9 +51,11 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('AuthContext: Erro no login', {
         message: error.message,
-        response: error.response?.data,
+        response: error.response,
         status: error.response?.status,
-        url: error.config?.url
+        url: error.config?.url,
+        baseURL: error.config?.baseURL,
+        fullURL: error.config?.baseURL + error.config?.url
       });
       throw error;
     }
@@ -88,4 +98,4 @@ export const useAuth = () => {
   return context;
 };
 
-export default AuthContext; 
+export default AuthContext;

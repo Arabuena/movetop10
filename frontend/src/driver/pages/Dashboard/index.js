@@ -15,6 +15,11 @@ const Dashboard = () => {
     stats 
   } = useDriver();
 
+  // Debug do currentRide
+  console.log('🏠 [DASHBOARD] currentRide:', currentRide);
+  console.log('🏠 [DASHBOARD] currentRide status:', currentRide?.status);
+  console.log('🏠 [DASHBOARD] Renderizando RideRequest?', !!currentRide);
+
   return (
     <div className="h-screen flex flex-col">
       {/* Header com status */}
@@ -42,15 +47,7 @@ const Dashboard = () => {
         <RideRequest ride={currentRide} />
       )}
 
-      {/* Botão de debug */}
-      {process.env.NODE_ENV !== 'production' && (
-        <button 
-          onClick={() => logger.showLogsInUI()}
-          className="fixed bottom-4 right-4 bg-gray-800 text-white p-2 rounded"
-        >
-          Debug Logs
-        </button>
-      )}
+
     </div>
   );
 };

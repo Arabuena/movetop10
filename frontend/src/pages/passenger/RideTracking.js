@@ -34,6 +34,40 @@ const RIDE_STATUS = {
   }
 };
 
+// Função para calcular ETA usando Google Maps Directions API
+const calculateETA = (driverLocation, destination) => {
+  return new Promise((resolve, reject) => {
+    if (!window.google || !window.google.maps) {
+      reject(new Error('Google Maps não carregado'));
+      return;
+    }
+
+    const directionsService = new window.google.maps.DirectionsService();
+    
+    directionsService.route({
+      origin: driverLocation,
+      destination: destination,
+      travelMode: window.google.maps.TravelMode.DRIVING,
+      unitSystem: window.google.maps.UnitSystem.METRIC,
+      avoidHighways: false,
+      avoidTolls: false
+    }, (result, status) => {
+      if (status === 'OK') {
+        const route = result.routes[0];
+        const leg = route.legs[0];
+        resolve({
+          duration: leg.duration.text,
+          durationValue: leg.duration.value, // em segundos
+          distance: leg.distance.text,
+          distanceValue: leg.distance.value // em metros
+        });
+      } else {
+        reject(new Error('Erro ao calcular rota: ' + status));
+      }
+    });
+  });
+};
+
 const RideTracking = () => {
   const { rideId } = useParams();
   const { socket } = useSocket();
@@ -43,7 +77,42 @@ const RideTracking = () => {
   const [showChat, setShowChat] = useState(false);
   const [driverLocation, setDriverLocation] = useState(null);
   const [directions, setDirections] = useState(null);
+  const [eta, setEta] = useState(null);
+  const [loadingEta, setLoadingEta] = useState(false);
   const navigate = useNavigate();
+
+  // Função para cancelar a corrida
+  const handleCancelRide = async () => {
+    try {
+      if (!socket || !ride?._id) {
+        toast.error('Erro ao cancelar corrida');
+        return;
+      }
+
+      const cancelPromise = new Promise((resolve, reject) => {
+        socket.emit('passenger:cancelRide', { rideId: ride._id }, (response) => {
+          if (response.success) {
+            resolve(response);
+            // Redirecionar para home após cancelamento
+            setTimeout(() => {
+              navigate('/passenger');
+            }, 2000);
+          } else {
+            reject(new Error(response.error || 'Erro ao cancelar corrida'));
+          }
+        });
+      });
+
+      await toast.promise(cancelPromise, {
+        loading: 'Cancelando corrida...',
+        success: 'Corrida cancelada com sucesso!',
+        error: (err) => `Erro: ${err.message}`
+      });
+
+    } catch (error) {
+      console.error('Erro ao cancelar corrida:', error);
+    }
+  };
 
   useEffect(() => {
     if (!socket) return;
@@ -153,19 +222,47 @@ const RideTracking = () => {
           status: ride.status
         });
 
-        const result = await directionsService.route({
-          origin: driverLocation,
-          destination: destination,
-          travelMode: window.google.maps.TravelMode.DRIVING,
+        // Calcular ETA quando o motorista está a caminho (status 'accepted')
+        if (ride.status === 'accepted') {
+          setLoadingEta(true);
+          try {
+            const etaData = await calculateETA(driverLocation, destination);
+            setEta(etaData);
+            console.log('ETA calculado:', etaData);
+          } catch (error) {
+            console.error('Erro ao calcular ETA:', error);
+            setEta(null);
+          } finally {
+            setLoadingEta(false);
+          }
+        } else {
+          setEta(null);
+        }
+
+        const result = await new Promise((resolve, reject) => {
+          directionsService.route({
+            origin: driverLocation,
+            destination: destination,
+            travelMode: window.google.maps.TravelMode.DRIVING,
+          }, (result, status) => {
+            if (status === 'OK') {
+              resolve(result);
+            } else {
+              reject(new Error('Erro ao calcular rota: ' + status));
+            }
+          });
         });
 
         setDirections(result);
       } catch (error) {
         console.error('Erro ao calcular rota:', error);
+        setDirections(null);
       }
     };
 
-    calculateRoute();
+    if (window.google && window.google.maps) {
+      calculateRoute();
+    }
   }, [driverLocation, ride]);
 
   if (loading) {
@@ -180,12 +277,46 @@ const RideTracking = () => {
     <div className="h-screen flex flex-col">
       {/* Status da corrida - APENAS PARA O PASSAGEIRO */}
       <div className="bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">
-          {RIDE_STATUS[ride?.status]?.title}
-        </h2>
-        <p className="text-gray-600">
-          {RIDE_STATUS[ride?.status]?.description}
-        </p>
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
+            <h2 className="text-lg font-semibold">
+              {RIDE_STATUS[ride?.status]?.title}
+            </h2>
+            <p className="text-gray-600">
+              {RIDE_STATUS[ride?.status]?.description}
+            </p>
+            
+            {/* Exibir ETA quando o motorista está a caminho */}
+            {ride?.status === 'accepted' && (
+              <div className="mt-2">
+                {loadingEta ? (
+                  <p className="text-sm text-blue-600">Calculando tempo de chegada...</p>
+                ) : eta ? (
+                  <div className="bg-blue-50 p-2 rounded-lg">
+                    <p className="text-sm font-medium text-blue-800">
+                      Tempo estimado: {eta.duration}
+                    </p>
+                    <p className="text-xs text-blue-600">
+                      Distância: {eta.distance}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">Calculando rota...</p>
+                )}
+              </div>
+            )}
+          </div>
+          
+          {/* Botão de cancelar - apenas para corridas que podem ser canceladas */}
+          {(ride?.status === 'pending' || ride?.status === 'accepted') && (
+            <button
+              onClick={handleCancelRide}
+              className="px-4 py-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors ml-4"
+            >
+              Cancelar
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Debug - mostrar status atual */}
@@ -236,15 +367,30 @@ const RideTracking = () => {
           mapContainerStyle={{ width: '100%', height: '100%' }}
           center={driverLocation || (ride?.origin && { lat: ride.origin.lat, lng: ride.origin.lng })}
           zoom={15}
+          options={{
+            zoomControl: true,
+            streetViewControl: false,
+            mapTypeControl: false,
+            fullscreenControl: false,
+            styles: [
+              {
+                featureType: 'poi',
+                elementType: 'labels',
+                stylers: [{ visibility: 'off' }]
+              }
+            ]
+          }}
         >
-          {/* Marcador do motorista */}
+          {/* Marcador do motorista com animação */}
           {driverLocation && (
             <Marker
               position={driverLocation}
               icon={{
                 url: '/images/car-marker.svg',
-                scaledSize: new window.google.maps.Size(32, 32)
+                scaledSize: new window.google.maps.Size(40, 40),
+                anchor: new window.google.maps.Point(20, 20)
               }}
+              title="Motorista"
             />
           )}
           
@@ -256,6 +402,7 @@ const RideTracking = () => {
                 url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
                 scaledSize: new window.google.maps.Size(32, 32)
               }}
+              title="Ponto de partida"
             />
           )}
           
@@ -267,18 +414,23 @@ const RideTracking = () => {
                 url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
                 scaledSize: new window.google.maps.Size(32, 32)
               }}
+              title="Destino"
             />
           )}
-          
-          {/* Renderização da rota */}
+
+          {/* Renderizar rota com cores diferentes baseadas no status */}
           {directions && (
             <DirectionsRenderer
               directions={directions}
               options={{
+                suppressMarkers: true, // Usar nossos próprios marcadores
                 polylineOptions: {
-                  strokeColor: ride?.status === 'in_progress' ? '#4CAF50' : '#2196F3',
-                  strokeWeight: 5
-                }
+                  strokeColor: ride?.status === 'in_progress' ? '#10B981' : '#3B82F6', // Verde para em viagem, azul para a caminho
+                  strokeWeight: 6,
+                  strokeOpacity: 0.8,
+                  geodesic: true
+                },
+                preserveViewport: false
               }}
             />
           )}
