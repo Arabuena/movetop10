@@ -2,18 +2,35 @@ import logger from '../../utils/logger';
 
 export const calculateRoute = async (origin, destination) => {
   try {
-    const directionsService = new google.maps.DirectionsService();
-    
-    const result = await directionsService.route({
-      origin,
-      destination,
-      travelMode: google.maps.TravelMode.DRIVING,
+    if (!window.google || !window.google.maps) {
+      throw new Error('Google Maps não carregado');
+    }
+
+    const directionsService = new window.google.maps.DirectionsService();
+
+    const result = await new Promise((resolve, reject) => {
+      directionsService.route(
+        {
+          origin,
+          destination,
+          travelMode: window.google.maps.TravelMode.DRIVING,
+        },
+        (res, status) => {
+          if (status === 'OK') {
+            resolve(res);
+          } else {
+            reject(new Error(`Erro ao calcular rota: ${status}`));
+          }
+        }
+      );
     });
+
+    const leg = result.routes?.[0]?.legs?.[0];
 
     return {
       directions: result,
-      distance: result.routes[0].legs[0].distance.value,
-      duration: result.routes[0].legs[0].duration.value
+      distance: leg?.distance?.value ?? null, // em metros
+      duration: leg?.duration?.value ?? null  // em segundos
     };
   } catch (error) {
     logger.error('Erro ao calcular rota:', error);
@@ -25,15 +42,15 @@ export const createMarkerIcon = (type) => {
   const icons = {
     driver: {
       url: '/images/car-marker.png',
-      size: new google.maps.Size(32, 32)
+      size: new window.google.maps.Size(32, 32)
     },
     passenger: {
       url: '/images/passenger-marker.png',
-      size: new google.maps.Size(32, 32)
+      size: new window.google.maps.Size(32, 32)
     },
     destination: {
       url: '/images/destination-marker.png',
-      size: new google.maps.Size(32, 32)
+      size: new window.google.maps.Size(32, 32)
     }
   };
 
@@ -68,4 +85,4 @@ export const getCurrentLocation = () => {
       }
     );
   });
-}; 
+};

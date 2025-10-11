@@ -23,6 +23,38 @@ export const DriverProvider = ({ children }) => {
     todayEarnings: 0
   });
 
+  // Normaliza payloads de eventos de corrida para garantir que tenha status e IDs
+  const normalizeRideData = (data) => {
+    if (!data) return null;
+
+    // Caso venha embrulhado em { ride }
+    if (data.ride) {
+      return { ...data.ride, status: data.ride.status || 'pending' };
+    }
+
+    const {
+      rideId,
+      _id,
+      passenger,
+      origin,
+      destination,
+      price,
+      distance,
+      duration
+    } = data;
+
+    return {
+      _id: _id || rideId,
+      rideId: rideId || _id,
+      passenger,
+      origin,
+      destination,
+      price,
+      distance,
+      duration,
+      status: data.status || 'pending'
+    };
+  };
   // Toggle status do motorista
   const toggleStatus = useCallback(async () => {
     console.log('DriverContext: toggleStatus chamado', { 
@@ -138,8 +170,9 @@ export const DriverProvider = ({ children }) => {
       console.log('🚗 [DRIVER CONTEXT] Status da corrida:', ride?.status);
       console.log('🚗 [DRIVER CONTEXT] Motorista está online?', isOnline);
       logger.debug('Nova solicitação de corrida:', ride);
-      setCurrentRide(ride);
-      console.log('🚗 [DRIVER CONTEXT] currentRide atualizado para:', ride);
+      const normalized = normalizeRideData(ride);
+      setCurrentRide(normalized);
+      console.log('🚗 [DRIVER CONTEXT] currentRide atualizado (normalizado) para:', normalized);
     });
 
     socket.on('driver:newRideAvailable', (data) => {
@@ -147,14 +180,9 @@ export const DriverProvider = ({ children }) => {
       console.log('🆕 [DRIVER CONTEXT] Status da corrida:', data?.status);
       console.log('🆕 [DRIVER CONTEXT] Motorista está online?', isOnline);
       logger.debug('Nova corrida disponível:', data);
-      if (data && data.ride) {
-        setCurrentRide(data.ride);
-        console.log('🆕 [DRIVER CONTEXT] currentRide atualizado para (data.ride):', data.ride);
-      } else if (data && data.rideId) {
-        // Se os dados vêm diretamente sem wrapper 'ride'
-        setCurrentRide(data);
-        console.log('🆕 [DRIVER CONTEXT] currentRide atualizado para (data):', data);
-      }
+      const normalized = normalizeRideData(data);
+      setCurrentRide(normalized);
+      console.log('🆕 [DRIVER CONTEXT] currentRide atualizado para (normalizado):', normalized);
     });
 
     socket.on('driver:rideAccepted', (ride) => {

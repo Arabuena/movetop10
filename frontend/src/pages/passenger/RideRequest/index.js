@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// RideRequest component (inserções de useRef e estado, ajuste do listener de aceitação e WaitingDriver)
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../../../contexts/SocketContext';
 import { toast } from 'react-hot-toast';
@@ -31,59 +32,67 @@ const RideRequest = () => {
   const [error, setError] = useState(null);
   const [waitingTime, setWaitingTime] = useState(0);
   const [noDriversFound, setNoDriversFound] = useState(false);
+  const [rideAccepted, setRideAccepted] = useState(false);
+  const intervalRef = useRef(null);
 
-  // Efeito para monitorar o tempo de espera quando estiver procurando motorista
+  // Iniciar/encerrar contador de espera conforme a etapa
   useEffect(() => {
-    let interval;
-    if (step === STEPS.WAITING_DRIVER && !noDriversFound) {
-      interval = setInterval(() => {
-        setWaitingTime(prev => {
-          const newTime = prev + 1;
-          // Após 30 segundos, considerar que não há motoristas disponíveis
-          if (newTime >= 30) {
-            setNoDriversFound(true);
-            clearInterval(interval);
-          }
-          return newTime;
-        });
+    if (step === STEPS.WAITING_DRIVER) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      intervalRef.current = setInterval(() => {
+        setWaitingTime((prev) => prev + 1);
       }, 1000);
     }
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [step, noDriversFound]);
 
-  // Ouvir eventos de aceitação de corrida
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [step]);
+
+  // Ouvir aceitação da corrida e eventos relacionados
   useEffect(() => {
     if (!socket) return;
 
-    const handleRideAccepted = (response) => {
-      console.log('Corrida aceita pelo motorista:', response);
-      if (response && response.ride) {
-        toast.success('Um motorista aceitou sua corrida!');
-        // Redirecionar para a tela de acompanhamento
-        const rideId = response.ride._id || response.ride.id;
-        if (rideId) {
-          navigate(`/passenger/rides/${rideId}`);
-        } else {
-          console.error('ID da corrida não encontrado na resposta:', response);
-          toast.error('Erro ao processar corrida aceita. Tente novamente.');
-        }
-      } else {
-        console.error('Dados da corrida incompletos na resposta:', response);
+    const handleRideAccepted = (payload) => {
+      const acceptedRide = payload?.ride || payload;
+      setRideAccepted(true);
+      setRide(acceptedRide);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
+      toast.dismiss('searching-drivers');
+      toast.success('Corrida aceita! Motorista a caminho.');
+      const id = acceptedRide?._id || acceptedRide?.id;
+      if (id) {
+        navigate(`/passenger/rides/${id}`);
+      }
+    };
+
+    const handleNoDrivers = () => {
+      setNoDriversFound(true);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      toast.error('Nenhum motorista encontrado no momento.');
     };
 
     socket.on('ride:accepted', handleRideAccepted);
     socket.on('passenger:rideAccepted', handleRideAccepted);
+    socket.on('ride:noDrivers', handleNoDrivers);
 
     return () => {
       socket.off('ride:accepted', handleRideAccepted);
       socket.off('passenger:rideAccepted', handleRideAccepted);
+      socket.off('ride:noDrivers', handleNoDrivers);
     };
   }, [socket, navigate]);
-
   const handleDestinationSelect = async (data) => {
     try {
       // Calcular estimativas
@@ -245,6 +254,7 @@ const RideRequest = () => {
             ride={ride} 
             waitingTime={waitingTime}
             noDriversFound={noDriversFound}
+            rideAccepted={rideAccepted}
             onCancel={handleCancelRide}
             onBack={() => navigate('/passenger')}
           />
@@ -263,9 +273,10 @@ const RideRequest = () => {
 };
 
 // Componente para mostrar enquanto aguarda um motorista aceitar a corrida
-const WaitingDriver = ({ ride, waitingTime, noDriversFound, onCancel, onBack }) => {
+const WaitingDriver = ({ ride, waitingTime, noDriversFound, rideAccepted, onCancel, onBack }) => {
   return (
     <div className="flex flex-col items-center justify-center h-full bg-white p-4">
+      {/* Ícone animado */}
       <div className="animate-pulse mb-4">
         <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -279,6 +290,13 @@ const WaitingDriver = ({ ride, waitingTime, noDriversFound, onCancel, onBack }) 
           <h2 className="text-xl font-semibold mb-2 text-orange-500">Nenhum motorista encontrado</h2>
           <p className="text-gray-600 text-center mb-4">
             Não encontramos motoristas disponíveis no momento. Tente novamente mais tarde.
+          </p>
+        </>
+      ) : rideAccepted ? (
+        <>
+          <h2 className="text-xl font-semibold mb-2 text-green-600">Corrida aceita! Motorista a caminho.</h2>
+          <p className="text-gray-600 text-center mb-4">
+            Seu motorista está se dirigindo até o ponto de encontro.
           </p>
         </>
       ) : (

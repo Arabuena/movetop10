@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { GoogleMap, Marker, DirectionsRenderer } from '@react-google-maps/api';
+import { GoogleMap, Marker, DirectionsRenderer, useJsApiLoader } from '@react-google-maps/api';
 import { PhoneIcon, ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
 import { useSocket } from '../../contexts/SocketContext';
 import Chat from '../../components/Chat';
 import { toast } from 'react-hot-toast';
 import { createBeepSound } from '../../utils/createBeepSound';
+import api from '../../services/api';
 
 const RIDE_STATUS = {
   pending: {
@@ -70,7 +71,7 @@ const calculateETA = (driverLocation, destination) => {
 
 const RideTracking = () => {
   const { rideId } = useParams();
-  const { socket } = useSocket();
+  const { socket, connected } = useSocket();
   const [ride, setRide] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -80,6 +81,11 @@ const RideTracking = () => {
   const [eta, setEta] = useState(null);
   const [loadingEta, setLoadingEta] = useState(false);
   const navigate = useNavigate();
+  // Carregar Google Maps JS API neste componente para garantir que o mapa/rotas renderizem
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY,
+    libraries: ['places']
+  });
 
   // Função para cancelar a corrida
   const handleCancelRide = async () => {
@@ -115,10 +121,43 @@ const RideTracking = () => {
   };
 
   useEffect(() => {
-    if (!socket) return;
+    // Não retornar cedo quando o socket estiver ausente; vamos usar HTTP como fallback
+    let cancelled = false;
 
-    // Carregar dados iniciais da corrida
+    const fetchRideHttp = async () => {
+      try {
+        const response = await api.get(`/passenger/rides/${rideId}`);
+        const rideData = response.data?.ride || response.data;
+        if (!cancelled) {
+          setRide(rideData);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar dados da corrida via HTTP:', err);
+        if (!cancelled) {
+          setError('Erro ao carregar dados da corrida');
+          setLoading(false);
+        }
+      }
+    };
+
+    // Se socket não existir ou não estiver conectado, usar HTTP imediatamente
+    if (!socket || !connected) {
+      fetchRideHttp();
+      return () => { cancelled = true; };
+    }
+
+    // Carregar dados iniciais da corrida via socket com timeout de fallback mais curto
+    const timeoutId = setTimeout(() => {
+      if (!cancelled) {
+        fetchRideHttp();
+      }
+    }, 4000);
+
+    // Carregar dados iniciais da corrida via socket
     socket.emit('ride:get', { rideId }, (response) => {
+      clearTimeout(timeoutId);
+      if (cancelled) return;
       console.log('Dados iniciais da corrida:', response); // Log para debug
       if (response.error) {
         setError(response.error);
@@ -155,8 +194,6 @@ const RideTracking = () => {
           : 'A corrida foi cancelada',
         { duration: 5000 }
       );
-      
-      // Redirecionar para home após alguns segundos
       setTimeout(() => {
         navigate('/passenger');
       }, 5000);
@@ -174,16 +211,18 @@ const RideTracking = () => {
     });
 
     return () => {
-      socket.off('ride:updated', handleRideUpdate);
-      socket.off('ride:driverArrived', handleDriverArrived);
-      socket.off('ride:started', handleRideStarted);
-      socket.off('ride:cancelled', handleRideCancelled);
-      socket.off('ride:accepted');
+      cancelled = true;
+      clearTimeout(timeoutId);
+      socket?.off('ride:updated', handleRideUpdate);
+      socket?.off('ride:driverArrived', handleDriverArrived);
+      socket?.off('ride:started', handleRideStarted);
+      socket?.off('ride:cancelled', handleRideCancelled);
+      socket?.off('ride:accepted');
     };
-  }, [socket, rideId, navigate]);
+  }, [socket, connected, rideId, navigate]);
 
   useEffect(() => {
-    if (!socket || !ride) return;
+    if (!socket || !connected || !ride) return;
 
     const handleDriverLocation = ({ location }) => {
       console.log('Nova localização do motorista recebida:', location);
@@ -202,33 +241,23 @@ const RideTracking = () => {
     return () => {
       socket.off('driver:location', handleDriverLocation);
     };
-  }, [socket, ride]);
+  }, [socket, connected, ride]);
 
   useEffect(() => {
-    if (!driverLocation || !ride) return;
-
+    if (!driverLocation || !ride || !isLoaded) return;
+    
     const calculateRoute = async () => {
       const directionsService = new window.google.maps.DirectionsService();
       try {
-        // Se o status for 'accepted', o motorista está indo buscar o passageiro
-        // Se o status for 'in_progress', o motorista está levando o passageiro ao destino
         const destination = ride.status === 'in_progress' 
           ? { lat: ride.destination.lat, lng: ride.destination.lng } 
           : { lat: ride.origin.lat, lng: ride.origin.lng };
 
-        console.log('Calculando rota:', {
-          origem: driverLocation,
-          destino: destination,
-          status: ride.status
-        });
-
-        // Calcular ETA quando o motorista está a caminho (status 'accepted')
-        if (ride.status === 'accepted') {
+        if (ride.status === 'accepted' || ride.status === 'in_progress') {
           setLoadingEta(true);
           try {
             const etaData = await calculateETA(driverLocation, destination);
             setEta(etaData);
-            console.log('ETA calculado:', etaData);
           } catch (error) {
             console.error('Erro ao calcular ETA:', error);
             setEta(null);
@@ -260,13 +289,19 @@ const RideTracking = () => {
       }
     };
 
-    if (window.google && window.google.maps) {
-      calculateRoute();
-    }
-  }, [driverLocation, ride]);
+    calculateRoute();
+  }, [driverLocation, ride, isLoaded]);
 
   if (loading) {
     return <div>Carregando...</div>;
+  }
+
+  if (loadError) {
+    return <div>Erro ao carregar o mapa. Recarregue a página.</div>;
+  }
+
+  if (!isLoaded) {
+    return <div>Carregando mapa...</div>;
   }
 
   if (error) {
@@ -286,18 +321,18 @@ const RideTracking = () => {
               {RIDE_STATUS[ride?.status]?.description}
             </p>
             
-            {/* Exibir ETA quando o motorista está a caminho */}
-            {ride?.status === 'accepted' && (
+            {/* Exibir ETA quando o motorista está a caminho ou em viagem */}
+            {(ride?.status === 'accepted' || ride?.status === 'in_progress') && (
               <div className="mt-2">
                 {loadingEta ? (
-                  <p className="text-sm text-blue-600">Calculando tempo de chegada...</p>
+                  <p className="text-sm text-blue-600">Calculando tempo estimado...</p>
                 ) : eta ? (
                   <div className="bg-blue-50 p-2 rounded-lg">
                     <p className="text-sm font-medium text-blue-800">
-                      Tempo estimado: {eta.duration}
+                      {ride?.status === 'accepted' ? 'Tempo estimado até o ponto de encontro: ' : 'Tempo estimado até o destino: '} {eta.duration}
                     </p>
                     <p className="text-xs text-blue-600">
-                      Distância: {eta.distance}
+                      {ride?.status === 'accepted' ? 'Distância até o ponto de encontro: ' : 'Distância até o destino: '} {eta.distance}
                     </p>
                   </div>
                 ) : (

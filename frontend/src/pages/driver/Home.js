@@ -6,6 +6,7 @@ import RideRequest from '../../driver/components/RideRequest';
 import Stats from '../../driver/components/Stats';
 import LocationError from '../../components/common/LocationError';
 import logger from '../../utils/logger';
+import { calculateRoute } from '../../driver/utils/mapUtils';
 
 const DriverHome = () => {
   const { 
@@ -22,6 +23,76 @@ const DriverHome = () => {
   } = useDriver();
   
   const [showError, setShowError] = useState(!!error);
+  const [eta, setEta] = useState(null);
+  const [etaLabel, setEtaLabel] = useState('');
+  const [loadingEta, setLoadingEta] = useState(false);
+
+  // Helper para normalizar pontos (origin/destination) da corrida em { lat, lng }
+  const toLatLng = (loc) => {
+    if (!loc) return null;
+    if (loc.coordinates && Array.isArray(loc.coordinates)) {
+      // Formato [lng, lat]
+      return { lat: loc.coordinates[1], lng: loc.coordinates[0] };
+    }
+    if (typeof loc.lat === 'number' && typeof loc.lng === 'number') {
+      return { lat: loc.lat, lng: loc.lng };
+    }
+    // Se vier como string endereço, poderíamos passar direto para DirectionsService,
+    // mas priorizamos coordenadas para evitar geocoding adicional.
+    return null;
+  };
+
+  React.useEffect(() => {
+    try {
+      if (!currentRide || !location) {
+        setEta(null);
+        return;
+      }
+      // Garantir que Google Maps já está disponível
+      if (!window.google || !window.google.maps) {
+        // Evita erro enquanto o script carrega; recalcularemos quando disponível
+        return;
+      }
+
+      let target = null;
+      let label = '';
+
+      if (currentRide.status === 'accepted') {
+        target = toLatLng(currentRide.origin);
+        label = 'ETA até o passageiro';
+      } else if (currentRide.status === 'in_progress') {
+        target = toLatLng(currentRide.destination);
+        label = 'ETA até o destino';
+      } else {
+        setEta(null);
+        return;
+      }
+
+      if (!target) {
+        setEta(null);
+        return;
+      }
+
+      setLoadingEta(true);
+      setEtaLabel(label);
+
+      (async () => {
+        try {
+          const result = await calculateRoute(location, target);
+          setEta({ duration: result.duration, distance: result.distance }); // duração em segundos, distância em metros
+        } catch (err) {
+          console.error('Erro ao calcular ETA:', err);
+          setEta(null);
+        } finally {
+          setLoadingEta(false);
+        }
+      })();
+    } catch (error) {
+      console.error('Erro no cálculo de ETA:', error);
+      setEta(null);
+      setLoadingEta(false);
+    }
+  }, [currentRide, location]);
 
   // Função para lidar com o botão "Tentar Novamente"
   const handleRetry = () => {
@@ -76,7 +147,18 @@ const DriverHome = () => {
             isUpdating={isUpdating}
             onToggle={toggleStatus} 
           />
-          <Stats data={stats} />
+          <div className="flex items-center gap-4">
+            <Stats data={stats} />
+            {(currentRide && (currentRide.status === 'accepted' || currentRide.status === 'in_progress')) && (
+              <div className="ml-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-sm whitespace-nowrap">
+                {loadingEta
+                  ? 'Calculando ETA...'
+                  : eta
+                    ? `${etaLabel}: ${Math.round(eta.duration / 60)} min`
+                    : 'ETA indisponível'}
+              </div>
+            )}
+          </div>
         </div>
       </header>
 

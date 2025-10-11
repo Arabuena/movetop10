@@ -1,6 +1,5 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { LoadScript } from '@react-google-maps/api';
 import { ToastContainer } from 'react-toastify';
 import { AuthProvider } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
@@ -11,6 +10,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { Toaster } from 'react-hot-toast';
 import { PrivateRoute, PublicOnlyRoute } from './components/PrivateRoute';
 import { DriverProvider } from './driver/contexts/DriverContext';
+import { LoadScript } from '@react-google-maps/api';
 
 // Páginas de autenticação
 import DriverLogin from './pages/auth/driver/Login';
@@ -55,7 +55,7 @@ function App() {
             }>
               <Route index element={<Login />} />
             </Route>
-
+  
             <Route path="/register/:userType" element={
               <PublicOnlyRoute>
                 <AuthLayout />
@@ -63,7 +63,7 @@ function App() {
             }>
               <Route index element={<Register />} />
             </Route>
-
+  
             <Route path="/passenger/*" element={
               <PrivateRoute>
                 <PassengerLayout />
@@ -74,7 +74,7 @@ function App() {
               <Route path="rides/:rideId" element={<RideTracking />} />
               <Route path="profile" element={<PassengerProfile />} />
             </Route>
-
+  
             <Route path="/driver/*" element={
               <PrivateRoute>
                 <DriverProvider>
