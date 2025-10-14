@@ -8,7 +8,7 @@ const handleGetActiveRide = async (socket, data, callback) => {
     // Buscar corrida ativa do passageiro
     const activeRide = await Ride.findOne({
       passenger: passengerId,
-      status: { $in: ['pending', 'accepted', 'in_progress'] }
+      status: { $in: ['pending', 'accepted', 'collecting', 'in_progress'] }
     }).populate('driver');
 
     if (!activeRide) {
@@ -38,7 +38,7 @@ const calculateDistance = (lat1, lng1, lat2, lng2) => {
 };
 
 // Handler para solicitar uma corrida
-const handleRequestRide = async (socket, data, callback, { getSocketByUserId }) => {
+const handleRequestRide = async (socket, data, callback, { getSocketByUserId, broadcastToDrivers, listConnectedUserIds }) => {
   try {
     console.log('🚗 Solicitação de corrida recebida:', data);
     console.log('👤 Passageiro ID:', socket.userId);
@@ -58,7 +58,7 @@ const handleRequestRide = async (socket, data, callback, { getSocketByUserId }) 
     });
 
     console.log(`📋 Encontrados ${availableDrivers.length} motoristas disponíveis:`, 
-      availableDrivers.map(d => ({ id: d._id, phone: d.phone })));
+      availableDrivers.map(d => ({ id: d._id, phone: d.phone, isOnline: d.isOnline, isAvailable: d.isAvailable })));
 
     if (availableDrivers.length === 0) {
       callback({ success: false, error: 'Nenhum motorista disponível no momento' });
@@ -95,6 +95,14 @@ const handleRequestRide = async (socket, data, callback, { getSocketByUserId }) 
     const closestDriver = closestDriverData.driver;
 
     console.log(`🎯 Motorista mais próximo encontrado: ${closestDriver._id} (${closestDriver.phone}) - Distância: ${closestDriverData.distance.toFixed(2)}km`);
+    console.log('📌 Detalhes da corrida a ser criada:', {
+      origin: data.origin,
+      destination: data.destination,
+      price: data.price,
+      distance: data.distance,
+      duration: data.duration,
+      paymentMethod: data.paymentMethod
+    });
 
     // Criar a corrida
     const ride = new Ride({
@@ -146,6 +154,24 @@ const handleRequestRide = async (socket, data, callback, { getSocketByUserId }) 
       console.log(`✅ Motorista mais próximo ${closestDriver._id} notificado (${closestDriverData.distance.toFixed(2)}km de distância)`);
     } else {
       console.log(`❌ Socket não encontrado para motorista mais próximo ${closestDriver._id}`);
+      const connectedIds = listConnectedUserIds ? listConnectedUserIds() : [];
+      console.log(`👥 Usuários conectados no momento: ${connectedIds.join(', ')}`);
+      
+      // Fallback: Broadcast para motoristas conectados
+      if (broadcastToDrivers) {
+        console.log('📣 Fallback: realizando broadcast da nova corrida para motoristas conectados');
+        const payload = {
+          rideId: ride._id,
+          passenger: socket.userId,
+          origin: data.origin,
+          destination: data.destination,
+          price: data.price,
+          distance: data.distance,
+          duration: data.duration,
+          distanceToPassenger: closestDriverData.distance.toFixed(2)
+        };
+        broadcastToDrivers('driver:newRideAvailable', payload);
+      }
     }
 
     console.log(`📊 Motorista mais próximo notificado: ${notifiedDrivers > 0 ? 'SIM' : 'NÃO'}`);
@@ -210,11 +236,39 @@ const handleRequestDriverLocation = async (socket, { rideId }, callback, { getSo
   }
 };
 
+// Buscar detalhes da corrida por ID (via Socket.IO)
+const handleGetRide = async (socket, { rideId }, callback) => {
+  try {
+    console.log(`📥 [RIDE GET] Passageiro ${socket.userId} solicitou detalhes da corrida ${rideId}`);
+
+    if (!rideId) {
+      throw new Error('ID da corrida não fornecido');
+    }
+
+    const ride = await Ride.findOne({
+      _id: rideId,
+      passenger: socket.userId
+    }).populate('driver', 'name phone vehicle');
+
+    if (!ride) {
+      console.log(`⚠️ [RIDE GET] Corrida ${rideId} não encontrada para passageiro ${socket.userId}`);
+      return callback({ error: 'Corrida não encontrada' });
+    }
+
+    console.log(`✅ [RIDE GET] Corrida ${rideId} encontrada. Status: ${ride.status}`);
+    callback({ ride });
+  } catch (error) {
+    console.error('❌ [RIDE GET] Erro ao buscar detalhes da corrida:', error);
+    callback({ error: error.message });
+  }
+};
+
 // Adicionar aos handlers
 const passengerHandlers = {
   'passenger:getActiveRide': handleGetActiveRide,
   'passenger:requestRide': handleRequestRide,
-  'passenger:requestDriverLocation': handleRequestDriverLocation
+  'passenger:requestDriverLocation': handleRequestDriverLocation,
+  'ride:get': handleGetRide
 };
 
 module.exports = passengerHandlers;

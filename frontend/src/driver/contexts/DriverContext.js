@@ -293,6 +293,37 @@ export const DriverProvider = ({ children }) => {
     }
   };
 
+  const startRide = useCallback(async (rideId) => {
+    if (!socket || !connected) {
+      throw new Error('Socket não está conectado');
+    }
+
+    try {
+      logger.debug('Tentando iniciar corrida:', rideId);
+
+      return new Promise((resolve, reject) => {
+        socket.emit('driver:startRide', { rideId }, (response) => {
+          if (response && response.success) {
+            logger.debug('Corrida iniciada com sucesso:', response.ride);
+            setCurrentRide(response.ride);
+            resolve(response.ride);
+          } else {
+            const err = response?.error || 'Erro ao iniciar corrida';
+            logger.error('Erro ao iniciar corrida:', err);
+            reject(new Error(err));
+          }
+        });
+
+        setTimeout(() => {
+          reject(new Error('Tempo esgotado ao iniciar corrida'));
+        }, 10000);
+      });
+    } catch (error) {
+      logger.error('Erro ao iniciar corrida:', error);
+      throw error;
+    }
+  }, [socket, connected]);
+
   const cancelRide = useCallback(async (rideId) => {
     if (!socket || !connected) {
       throw new Error('Socket não está conectado');
@@ -324,6 +355,83 @@ export const DriverProvider = ({ children }) => {
     }
   }, [socket, connected]);
 
+  // Método de teste: marcar chegada e iniciar imediatamente
+  const arriveAndStart = useCallback(async (rideId) => {
+    if (!socket || !connected) {
+      throw new Error('Socket não está conectado');
+    }
+
+    try {
+      logger.debug('Teste: Chegar e iniciar corrida:', rideId);
+
+      return new Promise((resolve, reject) => {
+        let handled = false;
+
+        // Fallback: se o ACK do teste não chegar rápido, executar arrived + start
+        const fallbackTimer = setTimeout(async () => {
+          if (handled) return;
+          logger.warn('ACK do teste não recebido. Executando fallback: arrived + start');
+          try {
+            // Marcar chegada
+            await new Promise((res, rej) => {
+              socket.emit('driver:arrived', { rideId }, (resp) => {
+                if (resp && resp.success) {
+                  logger.debug('Fallback: chegada marcada com sucesso');
+                  setCurrentRide(resp.ride);
+                  res();
+                } else {
+                  const err = resp?.error || 'Erro ao marcar chegada';
+                  logger.error('Fallback: erro ao marcar chegada:', err);
+                  rej(new Error(err));
+                }
+              });
+              // Timeout específico para a etapa de chegada
+              setTimeout(() => {
+                rej(new Error('Tempo esgotado ao marcar chegada'));
+              }, 5000);
+            });
+
+            // Iniciar a corrida em seguida
+            const startedRide = await startRide(rideId);
+            handled = true;
+            resolve(startedRide);
+          } catch (e) {
+            handled = true;
+            reject(e);
+          }
+        }, 3000);
+
+        // Tentativa principal: evento de teste que faz ambos (arrive + start)
+        socket.emit('driver:testArriveAndStart', { rideId }, (response) => {
+          if (handled) return;
+          clearTimeout(fallbackTimer);
+
+          if (response && response.success) {
+            logger.debug('Teste: corrida atualizada com sucesso:', response.ride);
+            setCurrentRide(response.ride);
+            handled = true;
+            resolve(response.ride);
+          } else {
+            const err = response?.error || 'Erro no teste Chegar e Iniciar';
+            logger.error('Erro no teste Chegar e Iniciar:', err);
+            handled = true;
+            reject(new Error(err));
+          }
+        });
+
+        // Guarda de segurança final para evitar travas silenciosas
+        setTimeout(() => {
+          if (handled) return;
+          handled = true;
+          reject(new Error('Tempo esgotado no teste Chegar e Iniciar'));
+        }, 10000);
+      });
+    } catch (error) {
+      logger.error('Erro no teste Chegar e Iniciar:', error);
+      throw error;
+    }
+  }, [socket, connected, startRide]);
+
   const value = {
     user,
     isOnline,
@@ -338,6 +446,8 @@ export const DriverProvider = ({ children }) => {
     rejectRide,
     completeRide,
     cancelRide
+    , startRide
+    , arriveAndStart
   };
 
   return (

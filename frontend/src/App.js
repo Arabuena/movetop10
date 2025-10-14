@@ -72,6 +72,9 @@ function App() {
               <Route index element={<RideRequest />} />
               <Route path="rides" element={<PassengerRides />} />
               <Route path="rides/:rideId" element={<RideTracking />} />
+              {/* Alias de rota para compatibilidade com caminhos antigos */}
+              <Route path="ride/:rideId" element={<RideTracking />} />
+              <Route path="ride" element={<Navigate to="/passenger/rides" replace />} />
               <Route path="profile" element={<PassengerProfile />} />
             </Route>
   

@@ -8,7 +8,7 @@ const handleGetActiveRide = async (socket, data, callback) => {
     // Buscar corrida ativa do motorista
     const activeRide = await Ride.findOne({
       driver: driverId,
-      status: { $in: ['accepted', 'in_progress'] }
+      status: { $in: ['accepted', 'collecting', 'in_progress'] }
     }).populate('passenger');
 
     if (!activeRide) {
@@ -259,6 +259,158 @@ const handleUpdateLocation = async (socket, location, callback, { getSocketByUse
   }
 };
 
+// Handler para iniciar a corrida (motorista coleta passageiro)
+const handleStartRide = async (socket, { rideId }, callback, { getSocketByUserId }) => {
+  try {
+    console.log(`Motorista ${socket.userId} iniciando corrida ${rideId}`);
+
+    // Buscar corrida
+    const ride = await Ride.findById(rideId).populate('passenger', 'name phone');
+    if (!ride) {
+      throw new Error('Corrida não encontrada');
+    }
+
+    // Validar permissão do motorista
+    if (!ride.driver || ride.driver.toString() !== socket.userId) {
+      throw new Error('Você não tem permissão para iniciar esta corrida');
+    }
+
+    // Validar status atual
+    if (!['accepted', 'collecting'].includes(ride.status)) {
+      if (ride.status === 'in_progress') {
+        console.log(`Corrida ${ride._id} já está em andamento`);
+      } else {
+        throw new Error('Status atual não permite iniciar a corrida');
+      }
+    }
+
+    // Atualizar status para em andamento
+    ride.status = 'in_progress';
+    await ride.save();
+
+    // Notificar passageiro
+    const passengerSocket = getSocketByUserId(
+      (ride.passenger?._id || ride.passenger).toString()
+    );
+    if (passengerSocket && passengerSocket.connected) {
+      console.log(`Notificando passageiro ${ride.passenger?._id || ride.passenger} sobre início da corrida ${ride._id}`);
+      passengerSocket.emit('ride:started', ride);
+    } else {
+      console.log(`Socket do passageiro ${ride.passenger?._id || ride.passenger} não encontrado ou não conectado`);
+    }
+
+    // Notificar o próprio motorista com atualização da corrida
+    socket.emit('driver:rideUpdated', ride);
+
+    // Responder callback
+    if (callback) {
+      callback({ success: true, ride });
+    }
+  } catch (error) {
+    console.error('Erro ao iniciar corrida:', error);
+    if (callback) {
+      callback({ success: false, error: error.message });
+    }
+  }
+};
+
+// Handler para marcar chegada do motorista no ponto de coleta
+const handleDriverArrived = async (socket, { rideId }, callback, { getSocketByUserId }) => {
+  try {
+    console.log(`Motorista ${socket.userId} chegou ao ponto de coleta da corrida ${rideId}`);
+
+    const ride = await Ride.findById(rideId).populate('passenger', 'name phone');
+    if (!ride) throw new Error('Corrida não encontrada');
+
+    if (!ride.driver || ride.driver.toString() !== socket.userId) {
+      throw new Error('Você não tem permissão para atualizar esta corrida');
+    }
+
+    if (!['accepted', 'collecting'].includes(ride.status)) {
+      if (ride.status === 'in_progress') {
+        console.log(`Corrida ${ride._id} já está em andamento`);
+      } else {
+        throw new Error('Status atual não permite marcar chegada');
+      }
+    }
+
+    // Atualizar status para coletando
+    ride.status = 'collecting';
+    await ride.save();
+
+    // Notificar passageiro
+    const passengerSocket = getSocketByUserId((ride.passenger?._id || ride.passenger).toString());
+    if (passengerSocket && passengerSocket.connected) {
+      console.log(`Notificando passageiro ${ride.passenger?._id || ride.passenger} sobre chegada do motorista na corrida ${ride._id}`);
+      passengerSocket.emit('ride:driverArrived', ride);
+      passengerSocket.emit('ride:updated', ride);
+    } else {
+      console.log(`Socket do passageiro ${ride.passenger?._id || ride.passenger} não encontrado ou não conectado`);
+    }
+
+    // Notificar o próprio motorista com atualização da corrida
+    socket.emit('driver:rideUpdated', ride);
+
+    if (callback) callback({ success: true, ride });
+  } catch (error) {
+    console.error('Erro ao marcar chegada do motorista:', error);
+    if (callback) callback({ success: false, error: error.message });
+  }
+};
+
+// Handler de teste: marcar chegada e iniciar imediatamente
+const handleTestArriveAndStart = async (socket, { rideId }, callback, helpers) => {
+  try {
+    console.log(`Teste: Motorista ${socket.userId} marcar chegada e iniciar corrida ${rideId}`);
+    // Primeiro marca chegada
+    await handleDriverArrived(socket, { rideId }, () => {}, helpers);
+    // Em seguida inicia a corrida
+    await handleStartRide(socket, { rideId }, () => {}, helpers);
+
+    // Buscar corrida atualizada para retornar no callback
+    const ride = await Ride.findById(rideId).populate('passenger', 'name phone');
+    if (callback) callback({ success: true, ride });
+  } catch (error) {
+    console.error('Erro no teste de chegada e início:', error);
+    if (callback) callback({ success: false, error: error.message });
+  }
+};
+
+// Handler para finalizar a corrida (teste simples)
+const handleCompleteRide = async (socket, { rideId }, callback, { getSocketByUserId }) => {
+  try {
+    console.log(`Motorista ${socket.userId} finalizando corrida ${rideId}`);
+
+    const ride = await Ride.findById(rideId).populate('passenger', 'name phone');
+    if (!ride) throw new Error('Corrida não encontrada');
+
+    if (!ride.driver || ride.driver.toString() !== socket.userId) {
+      throw new Error('Você não tem permissão para finalizar esta corrida');
+    }
+
+    if (!['in_progress', 'collecting', 'accepted'].includes(ride.status)) {
+      throw new Error('Status atual não permite finalizar a corrida');
+    }
+
+    ride.status = 'completed';
+    await ride.save();
+
+    // Notificar passageiro e motorista
+    const passengerSocket = getSocketByUserId((ride.passenger?._id || ride.passenger).toString());
+    if (passengerSocket && passengerSocket.connected) {
+      passengerSocket.emit('ride:updated', ride);
+      passengerSocket.emit('ride:completed', ride);
+    }
+
+    socket.emit('driver:rideCompleted', ride);
+
+    if (callback) callback({ success: true, ride });
+  } catch (error) {
+    console.error('Erro ao finalizar corrida:', error);
+    if (callback) callback({ success: false, error: error.message });
+  }
+};
+
 // Registrar handlers
 const driverHandlers = {
   'driver:acceptRide': handleAcceptRide,
@@ -267,6 +419,10 @@ const driverHandlers = {
   'driver:rideRequest': handleRideRequest,
   'driver:cancelRide': handleCancelRide,
   'driver:updateLocation': handleUpdateLocation,
+  'driver:startRide': handleStartRide,
+  'driver:arrived': handleDriverArrived,
+  'driver:testArriveAndStart': handleTestArriveAndStart,
+  'driver:completeRide': handleCompleteRide,
   'driver:newRideAvailable': handleRideRequest  // Adicionando um alias para garantir que o evento seja capturado
   // ... outros handlers ...
 };

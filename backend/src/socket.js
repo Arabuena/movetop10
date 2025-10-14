@@ -24,6 +24,24 @@ const setupSocket = (io) => {
 
   // Armazenar sockets por userId
   const userSockets = new Map();
+  
+  // Broadcast seguro para todos os motoristas conectados
+  const broadcastToDrivers = (event, payload) => {
+    try {
+      const sockets = Array.from(userSockets.entries());
+      const driverSockets = sockets.filter(([id, s]) => s && s.connected && s.userType === 'driver');
+      console.log(`Broadcast '${event}' para ${driverSockets.length} motoristas conectados. IDs: ${driverSockets.map(([id]) => id).join(', ')}`);
+      driverSockets.forEach(([id, s]) => {
+        try {
+          s.emit(event, payload);
+        } catch (err) {
+          console.error(`Falha ao emitir '${event}' para motorista ${id}:`, err.message);
+        }
+      });
+    } catch (err) {
+      console.error('Erro no broadcast para motoristas:', err);
+    }
+  };
 
   io.on('connection', (socket) => {
     console.log(`Novo cliente conectado: ${socket.userId} (${socket.userType})`);
@@ -35,35 +53,43 @@ const setupSocket = (io) => {
     console.log(`Total de usuários conectados: ${userSockets.size}`);
     console.log(`IDs de usuários conectados: ${Array.from(userSockets.keys()).join(', ')}`);
 
-    // Registrar handlers do motorista
-    Object.entries(driverHandlers).forEach(([event, handler]) => {
-      socket.on(event, (data, callback = () => {}) => {
-        console.log(`Evento recebido (${socket.userType}): ${event}`);
-        handler(socket, data, callback, { 
-          getSocketByUserId: (userId) => {
-            const userIdStr = String(userId);
-            const userSocket = userSockets.get(userIdStr);
-            console.log(`Buscando socket para usuário ${userIdStr}: ${userSocket ? 'encontrado' : 'não encontrado'}`);
-            return userSocket;
-          } 
+    // Registrar handlers do motorista apenas para conexões de motoristas
+    if (socket.userType === 'driver') {
+      Object.entries(driverHandlers).forEach(([event, handler]) => {
+        socket.on(event, (data, callback = () => {}) => {
+          console.log(`Evento recebido (${socket.userType}): ${event}`);
+          handler(socket, data, callback, {
+            getSocketByUserId: (userId) => {
+              const userIdStr = String(userId);
+              const userSocket = userSockets.get(userIdStr);
+              console.log(`Buscando socket para usuário ${userIdStr}: ${userSocket ? 'encontrado' : 'não encontrado'}`);
+              return userSocket;
+            },
+            broadcastToDrivers,
+            listConnectedUserIds: () => Array.from(userSockets.keys())
+          });
         });
       });
-    });
+    }
 
-    // Registrar handlers do passageiro
-    Object.entries(passengerHandlers).forEach(([event, handler]) => {
-      socket.on(event, (data, callback = () => {}) => {
-        console.log(`Evento recebido (${socket.userType}): ${event}`);
-        handler(socket, data, callback, { 
-          getSocketByUserId: (userId) => {
-            const userIdStr = String(userId);
-            const userSocket = userSockets.get(userIdStr);
-            console.log(`Buscando socket para usuário ${userIdStr}: ${userSocket ? 'encontrado' : 'não encontrado'}`);
-            return userSocket;
-          } 
+    // Registrar handlers do passageiro apenas para conexões de passageiros
+    if (socket.userType === 'passenger') {
+      Object.entries(passengerHandlers).forEach(([event, handler]) => {
+        socket.on(event, (data, callback = () => {}) => {
+          console.log(`Evento recebido (${socket.userType}): ${event}`);
+          handler(socket, data, callback, {
+            getSocketByUserId: (userId) => {
+              const userIdStr = String(userId);
+              const userSocket = userSockets.get(userIdStr);
+              console.log(`Buscando socket para usuário ${userIdStr}: ${userSocket ? 'encontrado' : 'não encontrado'}`);
+              return userSocket;
+            },
+            broadcastToDrivers,
+            listConnectedUserIds: () => Array.from(userSockets.keys())
+          });
         });
       });
-    });
+    }
 
     // Passageiro cancela corrida
     socket.on('passenger:cancelRide', async ({ rideId }, callback) => {

@@ -5,7 +5,7 @@ import logger from '../../../utils/logger';
 import { toast } from 'react-hot-toast';
 
 const RideRequest = ({ ride }) => {
-  const { acceptRide, rejectRide, cancelRide } = useDriver();
+  const { acceptRide, rejectRide, cancelRide, startRide, arriveAndStart, completeRide } = useDriver();
   const [isLoading, setIsLoading] = useState(false);
 
   // Debug do componente RideRequest
@@ -134,13 +134,81 @@ const RideRequest = ({ ride }) => {
             <>
               <button
                 className="flex-1 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700"
-                onClick={() => {
-                  // Aqui você pode adicionar lógica para iniciar a corrida
-                  logger.debug('Iniciar corrida:', ride._id);
+                onClick={async () => {
+                  if (isLoading) return;
+                  setIsLoading(true);
+                  const rideId = ride._id || ride.id;
+                  try {
+                    await toast.promise(
+                      startRide(rideId),
+                      {
+                        loading: 'Iniciando corrida...',
+                        success: 'Corrida iniciada! Boa viagem 🚗',
+                        error: (err) => `Erro ao iniciar: ${err.message}`
+                      }
+                    );
+                  } catch (error) {
+                    logger.error('Erro ao iniciar corrida:', error);
+                  } finally {
+                    setIsLoading(false);
+                  }
                 }}
               >
                 Iniciar Corrida
               </button>
+              {process.env.NODE_ENV !== 'production' && (
+                <button
+                  className="flex-1 py-2 text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100"
+                  onClick={async () => {
+                    if (isLoading) return;
+                    setIsLoading(true);
+                    const rideId = ride._id || ride.id;
+                    try {
+                      await toast.promise(
+                        arriveAndStart(rideId),
+                        {
+                          loading: 'Teste: chegando e iniciando...',
+                          success: 'Teste: motorista chegou e corrida iniciada',
+                          error: (err) => `Erro no teste: ${err.message}`
+                        }
+                      );
+                    } catch (error) {
+                      logger.error('Erro no teste Chegar e Iniciar:', error);
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                >
+                  Chegar e iniciar (teste)
+                </button>
+              )}
+              {/* Finalizar corrida (teste) também disponível quando corrida aceita (dev) */}
+              {process.env.NODE_ENV !== 'production' && (
+                <button
+                  className="flex-1 py-2 text-white bg-green-700 rounded-lg hover:bg-green-800"
+                  onClick={async () => {
+                    if (isLoading) return;
+                    setIsLoading(true);
+                    const rideId = ride._id || ride.id;
+                    try {
+                      await toast.promise(
+                        completeRide(rideId),
+                        {
+                          loading: 'Finalizando corrida (teste)...',
+                          success: 'Corrida finalizada (teste)!',
+                          error: (err) => `Erro ao finalizar: ${err.message}`
+                        }
+                      );
+                    } catch (error) {
+                      logger.error('Erro ao finalizar corrida (teste):', error);
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                >
+                  Finalizar Corrida (teste)
+                </button>
+              )}
               <button
                 onClick={handleCancel}
                 disabled={isLoading}
@@ -151,6 +219,33 @@ const RideRequest = ({ ride }) => {
                 {isLoading ? 'Cancelando...' : 'Cancelar'}
               </button>
             </>
+          )}
+          {/* Quando estiver em andamento, exibir botão de finalizar (teste) dentro deste bloco (dev) */}
+          {isInProgress && process.env.NODE_ENV !== 'production' && (
+            <button
+              className="flex-1 py-2 text-white bg-green-700 rounded-lg hover:bg-green-800"
+              onClick={async () => {
+                if (isLoading) return;
+                setIsLoading(true);
+                const rideId = ride._id || ride.id;
+                try {
+                  await toast.promise(
+                    completeRide(rideId),
+                    {
+                      loading: 'Finalizando corrida (teste)...',
+                      success: 'Corrida finalizada (teste)!',
+                      error: (err) => `Erro ao finalizar: ${err.message}`
+                    }
+                  );
+                } catch (error) {
+                  logger.error('Erro ao finalizar corrida (teste):', error);
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
+            >
+              Finalizar Corrida (teste)
+            </button>
           )}
         </div>
       </div>
@@ -200,6 +295,7 @@ const RideRequest = ({ ride }) => {
   }
 
   // Para outros status, não mostrar nada
+
   return null;
 };
 

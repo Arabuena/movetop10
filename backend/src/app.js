@@ -18,6 +18,10 @@ const io = new Server(httpServer, {
       process.env.FRONTEND_URL || 'http://localhost:3000',
       'http://localhost:3001',
       'http://localhost:3002',
+      'http://localhost:3012',
+      'http://localhost:3013',
+      'http://localhost:3010',
+      'http://localhost:3011',
       'https://movetop10.onrender.com'
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -32,6 +36,10 @@ app.use(cors({
     process.env.FRONTEND_URL || 'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:3002',
+    'http://localhost:3012',
+    'http://localhost:3013',
+    'http://localhost:3010',
+    'http://localhost:3011',
     'https://movetop10.onrender.com'
   ],
   credentials: true,

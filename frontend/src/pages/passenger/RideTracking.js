@@ -120,6 +120,17 @@ const RideTracking = () => {
     }
   };
 
+  // Guardar navegação se o ID for inválido
+  useEffect(() => {
+    if (!rideId || rideId === 'undefined') {
+      toast.error('ID da corrida inválido');
+      setError('ID da corrida inválido');
+      setLoading(false);
+      navigate('/passenger/rides');
+      return;
+    }
+  }, [rideId, navigate]);
+
   useEffect(() => {
     // Não retornar cedo quando o socket estiver ausente; vamos usar HTTP como fallback
     let cancelled = false;
