@@ -7,11 +7,10 @@ const useLocation = (enabled = true) => {
   const [permissionStatus, setPermissionStatus] = useState('prompt');
   const [useDefaultLocation, setUseDefaultLocation] = useState(false);
 
-  // Localização padrão para Goiânia
+  // Localização padrão fixa (somente fallback quando necessário)
   const defaultLocation = {
-    // Adicionar pequena variação aleatória para simular posições diferentes em testes
-    lat: -16.6869 + (Math.random() - 0.5) * 0.01, // ~500m de variação
-    lng: -49.2648 + (Math.random() - 0.5) * 0.01,
+    lat: -16.6869,
+    lng: -49.2648,
     accuracy: 1000,
     timestamp: Date.now(),
     isDefault: true
@@ -61,18 +60,12 @@ const useLocation = (enabled = true) => {
         return;
       }
 
-      // Configurações específicas para Android
+      // Opções Web API de geolocalização
       const options = {
         enableHighAccuracy: true,
-        timeout: 20000,
-        maximumAge: 1000,
-        // Android requer um tempo mínimo (ms) e distância (metros) para updates
-        distanceFilter: 10, // metros
-        interval: 3000, // milliseconds
+        timeout: 15000,
+        maximumAge: 0
       };
-
-      // Usar localização padrão imediatamente para evitar atrasos
-      setLocation(defaultLocation);
       
       watchId = navigator.geolocation.watchPosition(
         (position) => {
@@ -114,6 +107,26 @@ const useLocation = (enabled = true) => {
               setError('Erro ao obter localização.');
               setLocation(defaultLocation);
           }
+        },
+        options
+      );
+      
+      // Também obtém uma posição inicial imediata (caso watch demore)
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          if (useDefaultLocation) return;
+          const initialLocation = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            timestamp: position.timestamp
+          };
+          setLocation((prev) => prev?.timestamp ? prev : initialLocation);
+          setError(null);
+          logger.debug('Localização inicial obtida:', initialLocation);
+        },
+        (error) => {
+          logger.warn('Falha ao obter posição inicial, mantendo watch:', error);
         },
         options
       );

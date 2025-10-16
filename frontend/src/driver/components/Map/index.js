@@ -34,7 +34,20 @@ const Map = ({ center, isOnline, currentRide }) => {
     // Quando há corrida aceita ou em andamento, calcular rota até o passageiro (accepted) ou destino (in_progress)
     try {
       if (!isLoaded || !window.google || !window.google.maps) return;
-      if (!center || !currentRide) {
+      const shouldShowRoute = currentRide && (currentRide.status === 'accepted' || currentRide.status === 'in_progress');
+
+      // Centro efetivo: usa centro real se precisão <= 100m; caso contrário, usa origem da corrida se disponível
+      const effectiveCenter = (() => {
+        if (center && typeof center.accuracy === 'number' && center.accuracy <= 100 && !center.isDefault) {
+          return center;
+        }
+        if (currentRide?.origin && typeof currentRide.origin.lat === 'number' && typeof currentRide.origin.lng === 'number') {
+          return { lat: currentRide.origin.lat, lng: currentRide.origin.lng };
+        }
+        return null;
+      })();
+
+      if (!effectiveCenter || !currentRide || !shouldShowRoute) {
         setDirections(null);
         return;
       }
@@ -57,7 +70,7 @@ const Map = ({ center, isOnline, currentRide }) => {
       const directionsService = new window.google.maps.DirectionsService();
       directionsService.route(
         {
-          origin: center,
+          origin: effectiveCenter,
           destination,
           travelMode: window.google.maps.TravelMode.DRIVING
         },
@@ -87,21 +100,44 @@ const Map = ({ center, isOnline, currentRide }) => {
   return (
     <GoogleMap
       mapContainerStyle={{ width: '100%', height: '100%' }}
-      center={center || { lat: -16.5775095, lng: -49.3754792 }}
+      center={(() => {
+        // Escolhe o mesmo centro que será usado para o marcador
+        if (center && typeof center.accuracy === 'number' && center.accuracy <= 100 && !center.isDefault) {
+          return center;
+        }
+        if (currentRide?.origin) {
+          return { lat: currentRide.origin.lat, lng: currentRide.origin.lng };
+        }
+        // Quando não há origem e a precisão é baixa/padrão, mantém um centro padrão
+        return { lat: -16.5775095, lng: -49.3754792 };
+      })()}
       zoom={15}
       options={mapOptions}
+      
     >
-      {/* Marcador do motorista */}
-      {center && (
-        <Marker
-          position={center}
-          icon={{
-            url: '/images/car-marker.svg',
-            scaledSize: new window.google.maps.Size(40, 40),
-            anchor: new window.google.maps.Point(20, 20)
-          }}
-        />
-      )}
+      {/* Marcador do motorista: sempre mostra no centro escolhido */}
+      {(() => {
+        const markerPos = (() => {
+          if (center && typeof center.accuracy === 'number' && center.accuracy <= 100 && !center.isDefault) {
+            return center;
+          }
+          if (currentRide?.origin) {
+            return { lat: currentRide.origin.lat, lng: currentRide.origin.lng };
+          }
+          return defaultCenter;
+        })();
+
+        return (
+          <Marker
+            position={markerPos}
+            icon={{
+              url: '/images/car-marker.svg',
+              scaledSize: new window.google.maps.Size(40, 40),
+              anchor: new window.google.maps.Point(20, 20)
+            }}
+          />
+        );
+      })()}
 
       {/* Marcadores de origem/destino do passageiro */}
       {currentRide?.origin && currentRide?.status !== 'in_progress' && (
@@ -132,6 +168,7 @@ const Map = ({ center, isOnline, currentRide }) => {
           directions={directions}
           options={{
             suppressMarkers: true,
+            preserveViewport: true,
             polylineOptions: {
               strokeColor: currentRide?.status === 'in_progress' ? '#10B981' : '#3B82F6',
               strokeOpacity: 0.9,

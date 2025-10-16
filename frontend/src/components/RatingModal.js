@@ -53,7 +53,7 @@ const RatingModal = ({ ride, onClose, onSubmit }) => {
             id="comment"
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-move-primary focus:border-move-primary"
             rows="3"
             placeholder="Deixe um comentário sobre sua viagem..."
           />
@@ -71,7 +71,7 @@ const RatingModal = ({ ride, onClose, onSubmit }) => {
             type="button"
             onClick={handleSubmit}
             disabled={!rating || loading}
-            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-white bg-move-primary border border-transparent rounded-md hover:bg-move-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-move-primary disabled:opacity-50"
           >
             {loading ? 'Enviando...' : 'Enviar avaliação'}
           </button>
@@ -81,4 +81,4 @@ const RatingModal = ({ ride, onClose, onSubmit }) => {
   );
 };
 
-export default RatingModal; 
+export default RatingModal;

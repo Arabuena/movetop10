@@ -286,9 +286,35 @@ export const DriverProvider = ({ children }) => {
   useEffect(() => {
     if (!socket || !location || !isOnline) return;
 
-    socket.emit('driver:updateLocation', location);
-    logger.debug('Localização enviada:', location);
-  }, [socket, location, isOnline]);
+    // Calcula uma localização efetiva quando precisão é baixa ou fallback
+    const isPoorAccuracy =
+      location.isDefault ||
+      typeof location.accuracy !== 'number' ||
+      location.accuracy > 100;
+
+    const rideActive = !!(currentRide && ['accepted', 'collecting', 'in_progress'].includes(currentRide.status));
+    const hasOrigin = !!(currentRide?.origin && typeof currentRide.origin.lat === 'number' && typeof currentRide.origin.lng === 'number');
+
+    const effectiveLocation = (() => {
+      if (rideActive && isPoorAccuracy && hasOrigin) {
+        return {
+          lat: currentRide.origin.lat,
+          lng: currentRide.origin.lng,
+          accuracy: location.accuracy ?? 1000,
+          source: 'origin_fallback'
+        };
+      }
+      return {
+        lat: location.lat,
+        lng: location.lng,
+        accuracy: location.accuracy,
+        source: 'gps'
+      };
+    })();
+
+    socket.emit('driver:updateLocation', effectiveLocation);
+    logger.debug('Localização enviada (efetiva):', effectiveLocation);
+  }, [socket, location, isOnline, currentRide]);
 
   // Funções para gerenciar corridas
   const acceptRide = useCallback(async (rideId) => {

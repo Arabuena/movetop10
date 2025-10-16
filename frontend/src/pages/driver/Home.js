@@ -78,7 +78,16 @@ const DriverHome = () => {
 
       (async () => {
         try {
-          const result = await calculateRoute(location, target);
+          // Usa localização efetiva para ETA: real se precisão <= 100m, caso contrário origem da corrida
+          const originForETA = (() => {
+            if (location && typeof location.accuracy === 'number' && location.accuracy <= 100 && !location.isDefault) {
+              return location;
+            }
+            const originLatLng = toLatLng(currentRide.origin);
+            return originLatLng || location;
+          })();
+
+          const result = await calculateRoute(originForETA, target);
           setEta({ duration: result.duration, distance: result.distance }); // duração em segundos, distância em metros
         } catch (err) {
           console.error('Erro ao calcular ETA:', err);

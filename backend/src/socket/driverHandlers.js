@@ -236,7 +236,7 @@ const handleUpdateLocation = async (socket, location, callback, { getSocketByUse
     // Buscar corrida ativa do motorista
     const activeRide = await Ride.findOne({
       driver: socket.userId,
-      status: { $in: ['accepted', 'in_progress'] }
+      status: { $in: ['accepted', 'collecting', 'in_progress'] }
     });
     
     // Se há corrida ativa, notificar o passageiro sobre a nova localização

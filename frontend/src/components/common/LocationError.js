@@ -40,7 +40,7 @@ const LocationError = ({
           {permissionStatus !== 'granted' && (
             <Button 
               onClick={onRequestPermission}
-              className="w-full bg-primary"
+              className="w-full bg-move-primary text-white hover:bg-move-primary/90"
             >
               Permitir Acesso à Localização
             </Button>

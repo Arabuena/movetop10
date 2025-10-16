@@ -4,6 +4,7 @@ import { GoogleMap, Marker, DirectionsRenderer, useJsApiLoader } from '@react-go
 import { PhoneIcon, ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
 import { useSocket } from '../../contexts/SocketContext';
 import Chat from '../../components/Chat';
+import RatingModal from '../../components/RatingModal';
 import { toast } from 'react-hot-toast';
 import { createBeepSound } from '../../utils/createBeepSound';
 import api from '../../services/api';
@@ -80,6 +81,7 @@ const RideTracking = () => {
   const [directions, setDirections] = useState(null);
   const [eta, setEta] = useState(null);
   const [loadingEta, setLoadingEta] = useState(false);
+  const [showRating, setShowRating] = useState(false);
   const navigate = useNavigate();
   // Carregar Google Maps JS API neste componente para garantir que o mapa/rotas renderizem
   const { isLoaded, loadError } = useJsApiLoader({
@@ -303,6 +305,30 @@ const RideTracking = () => {
     calculateRoute();
   }, [driverLocation, ride, isLoaded]);
 
+  // Abrir modal de avaliação quando a corrida for concluída e ainda não houver avaliação
+  useEffect(() => {
+    if (!ride) return;
+    const alreadyRated = !!(ride.rating && typeof ride.rating.driver === 'number');
+    if (ride.status === 'completed' && !alreadyRated) {
+      setShowRating(true);
+    } else {
+      setShowRating(false);
+    }
+  }, [ride]);
+
+  const submitRating = async (rating, comment) => {
+    try {
+      if (!ride?._id) return;
+      const response = await api.post(`/passenger/rides/${ride._id}/rate`, { rating });
+      const updated = response.data?.ride || response.data;
+      setRide(updated);
+      setShowRating(false);
+      toast.success('Avaliação enviada com sucesso!');
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Erro ao enviar avaliação');
+    }
+  };
+
   if (loading) {
     return <div>Carregando...</div>;
   }
@@ -482,6 +508,15 @@ const RideTracking = () => {
           )}
         </GoogleMap>
       </div>
+
+      {/* Modal de avaliação */}
+      {showRating && ride?.driver && (
+        <RatingModal
+          ride={ride}
+          onClose={() => setShowRating(false)}
+          onSubmit={submitRating}
+        />
+      )}
     </div>
   );
 };

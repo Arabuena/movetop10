@@ -39,7 +39,11 @@ const PlacesAutocomplete = ({ value, onChange, placeholder, className }) => {
       >
         <input
           type="text"
-          defaultValue={value}
+          value={value}
+          onChange={(e) => {
+            // Atualiza somente o address enquanto não há geocódigo
+            onChange({ address: e.target.value });
+          }}
           placeholder={placeholder}
           className={className}
         />
@@ -48,4 +52,4 @@ const PlacesAutocomplete = ({ value, onChange, placeholder, className }) => {
   );
 };
 
-export default PlacesAutocomplete; 
+export default PlacesAutocomplete;

@@ -2,12 +2,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import api from '../../services/api';
 import { formatPrice } from '../../utils/rideCalculator';
 import { MapPinIcon, ClockIcon, CurrencyDollarIcon } from '@heroicons/react/24/outline';
+import { useDriver } from '../../driver/contexts/DriverContext';
 
 const DriverRides = () => {
   const [rides, setRides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [query, setQuery] = useState('');
+  const { cancelRide, isUpdating } = useDriver();
 
   useEffect(() => {
     let isMounted = true;
@@ -63,6 +65,28 @@ const DriverRides = () => {
     });
   }, [rides, statusFilter, query]);
 
+  const refreshRides = async () => {
+    try {
+      const { data } = await api.get('/driver/rides');
+      setRides(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Erro ao atualizar lista de corridas:', err);
+    }
+  };
+
+  const cancelAllInProgress = async () => {
+    const toCancel = rides.filter(r => r.status === 'in_progress');
+    if (toCancel.length === 0) return;
+    for (const r of toCancel) {
+      try {
+        await cancelRide(r._id);
+      } catch (e) {
+        console.error('Falha ao cancelar corrida', r._id, e);
+      }
+    }
+    await refreshRides();
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -103,6 +127,13 @@ const DriverRides = () => {
           placeholder="Buscar por endereço"
           className="flex-1 px-3 py-2 rounded border border-gray-300"
         />
+        <button
+          onClick={cancelAllInProgress}
+          disabled={isUpdating}
+          className={`px-3 py-2 rounded text-sm border transition ${isUpdating ? 'opacity-50 cursor-not-allowed' : 'border-red-600 text-red-700 hover:bg-red-50'}`}
+        >
+          Cancelar corridas em andamento
+        </button>
       </div>
 
       <div className="bg-white rounded-lg shadow">

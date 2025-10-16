@@ -28,6 +28,17 @@ export const useLocation = () => {
   const [permissionStatus, setPermissionStatus] = useState('prompt');
   const [currentStrategyIndex, setCurrentStrategyIndex] = useState(0);
   const [locationPrecision, setLocationPrecision] = useState('buscando');
+  const [lastRefineAt, setLastRefineAt] = useState(0);
+  const [refineAttempts, setRefineAttempts] = useState(0);
+  const [boostActive, setBoostActive] = useState(false);
+  const [boostIntervalId, setBoostIntervalId] = useState(null);
+  const [boostTimeoutId, setBoostTimeoutId] = useState(null);
+  // Mapa sempre disponível imediatamente (sem espera)
+  const [readyForMap, setReadyForMap] = useState(true);
+  const [mapCountdown, setMapCountdown] = useState(0);
+  const [mapCountdownIntervalId, setMapCountdownIntervalId] = useState(null);
+  // Fallback por rede/IP (Google Geolocation API)
+  const [coarseFallbackTried, setCoarseFallbackTried] = useState(false);
 
   // Verifica o status da permissão de geolocalização
   const checkPermissionStatus = async () => {
@@ -44,6 +55,23 @@ export const useLocation = () => {
       console.error('Erro ao verificar permissão:', err);
     }
   };
+
+  // Sem gating: garantir que o mapa esteja marcado como pronto ao montar
+  useEffect(() => {
+    setReadyForMap(true);
+    setMapCountdown(0);
+    if (mapCountdownIntervalId) {
+      clearInterval(mapCountdownIntervalId);
+      setMapCountdownIntervalId(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Mapa já está pronto por padrão; manter coerência
+    if (!readyForMap) {
+      setReadyForMap(true);
+    }
+  }, [locationPrecision, readyForMap]);
 
   // Solicita novamente a localização real com a próxima estratégia
   const tryNextStrategy = () => {
@@ -94,6 +122,193 @@ export const useLocation = () => {
     }
   };
 
+  // Tenta refinar a precisão quando recebemos leituras com precisão baixa
+  const refineLowPrecision = () => {
+    if (!navigator.geolocation) return;
+    const now = Date.now();
+    // Limitar frequência das tentativas de refinamento (mais agressivo)
+    if (now - lastRefineAt < 5000 || refineAttempts >= 12) {
+      return;
+    }
+    setLastRefineAt(now);
+    setRefineAttempts((n) => n + 1);
+
+    const options = {
+      enableHighAccuracy: true,
+      timeout: 20000,
+      maximumAge: 0
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const refined = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          isDefault: false
+        };
+        setLocation(refined);
+        if (position.coords.accuracy <= 10) {
+          setLocationPrecision('alta');
+        } else if (position.coords.accuracy <= 100) {
+          setLocationPrecision('média');
+          // Se atingimos <= 100m, encerrar qualquer boost ativo
+          if (boostIntervalId) {
+            clearInterval(boostIntervalId);
+            setBoostIntervalId(null);
+          }
+          if (boostTimeoutId) {
+            clearTimeout(boostTimeoutId);
+            setBoostTimeoutId(null);
+          }
+          setBoostActive(false);
+        } else {
+          setLocationPrecision('baixa');
+        }
+      },
+      (err) => {
+        // Se falhar, tenta próxima estratégia de forma controlada
+        handleGeolocationError(err);
+      },
+      options
+    );
+  };
+
+  // Inicia um "boost" de precisão por um período (padrão 60s),
+  // solicitando leituras de alta precisão em intervalos curtos.
+  const startPrecisionBoost = (durationMs = 60000) => {
+    if (!navigator.geolocation || boostActive) return;
+    setBoostActive(true);
+
+    const options = {
+      enableHighAccuracy: true,
+      timeout: 20000,
+      maximumAge: 0
+    };
+
+    const intervalId = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const refined = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            isDefault: false
+          };
+          setLocation(refined);
+          if (position.coords.accuracy <= 10) {
+            setLocationPrecision('alta');
+          } else if (position.coords.accuracy <= 100) {
+            setLocationPrecision('média');
+          } else {
+            setLocationPrecision('baixa');
+          }
+
+          // Se atingiu precisão aceitável, encerrar boost mais cedo
+          if (position.coords.accuracy <= 100) {
+            clearInterval(intervalId);
+            if (boostTimeoutId) clearTimeout(boostTimeoutId);
+            setBoostActive(false);
+            setBoostIntervalId(null);
+            setBoostTimeoutId(null);
+          }
+        },
+        (err) => {
+          // Em caso de erro, manter o boost até o tempo acabar
+          handleGeolocationError(err);
+        },
+        options
+      );
+    }, 5000); // tentar a cada 5s durante 60s
+
+    const timeoutId = setTimeout(() => {
+      clearInterval(intervalId);
+      setBoostActive(false);
+      setBoostIntervalId(null);
+      setBoostTimeoutId(null);
+    }, durationMs);
+
+    setBoostIntervalId(intervalId);
+    setBoostTimeoutId(timeoutId);
+  };
+
+  // Usa a Google Geolocation API para obter localização aproximada via rede/IP
+  const getCoarseLocation = async () => {
+    try {
+      const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+      // Primeiro tentar Google Geolocation API (melhor quando disponível)
+      if (apiKey) {
+        const resp = await fetch(`https://www.googleapis.com/geolocation/v1/geolocate?key=${apiKey}` , {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && data.location) {
+            const refined = {
+              latitude: data.location.lat,
+              longitude: data.location.lng,
+              accuracy: typeof data.accuracy === 'number' ? data.accuracy : 1000,
+              isDefault: false
+            };
+            setLocation(refined);
+            if (refined.accuracy <= 10) {
+              setLocationPrecision('alta');
+            } else if (refined.accuracy <= 100) {
+              setLocationPrecision('média');
+            } else {
+              setLocationPrecision('baixa');
+            }
+            // Abrir mapa imediatamente e tentar refinar após fallback
+            setReadyForMap(true);
+            setMapCountdown(0);
+            if (permissionStatus === 'granted' && !boostActive) {
+              startPrecisionBoost(45000);
+              refineLowPrecision();
+            }
+            return refined;
+          }
+        } else {
+          console.warn('Falha na Google Geolocation API:', resp.status);
+        }
+      }
+
+      // Fallback: usar IP geolocation público (ipapi.co)
+      const ipResp = await fetch('https://ipapi.co/json/');
+      if (ipResp.ok) {
+        const ipData = await ipResp.json();
+        if (ipData && typeof ipData.latitude === 'number' && typeof ipData.longitude === 'number') {
+          const refined = {
+            latitude: ipData.latitude,
+            longitude: ipData.longitude,
+            accuracy: 1500, // aproximado
+            isDefault: false
+          };
+          setLocation(refined);
+          setLocationPrecision('baixa');
+          // Abrir mapa imediatamente e tentar refinar após fallback
+          setReadyForMap(true);
+          setMapCountdown(0);
+          if (permissionStatus === 'granted' && !boostActive) {
+            startPrecisionBoost(45000);
+            refineLowPrecision();
+          }
+          return refined;
+        }
+      }
+      return null;
+    } catch (e) {
+      console.error('Erro ao obter localização aproximada:', e);
+      return null;
+    }
+  };
+
+  // Permite a UI dispensar o modal de erro de localização
+  const dismissLocationError = () => {
+    setError(null);
+  };
+
   // Solicita permissão de geolocalização explicitamente
   const requestPermission = () => {
     if (navigator.geolocation) {
@@ -113,8 +328,7 @@ export const useLocation = () => {
     }
   };
 
-  // Função para adicionar pequena variação aleatória para simular posições diferentes em testes
-  const randomVariation = () => (Math.random() - 0.5) * 0.01; // ~500m de variação
+  // Removido: variação aleatória que causava diferenças artificiais na localização
 
   // Trata os erros de geolocalização com mensagens específicas
   const handleGeolocationError = (err) => {
@@ -131,11 +345,10 @@ export const useLocation = () => {
       setError('Erro ao obter localização. Verifique suas configurações de GPS.');
       setLocationPrecision('indisponível');
       
-      // Usar localização padrão para erro desconhecido
-      // Adicionar pequena variação aleatória para simular posições diferentes em testes
+      // Usar localização padrão fixa (Goiânia) como fallback sem variação
       setLocation({
-        latitude: -16.6869 + randomVariation(),
-        longitude: -49.2648 + randomVariation(),
+        latitude: -16.6869,
+        longitude: -49.2648,
         accuracy: 1000,
         isDefault: true
       });
@@ -157,11 +370,10 @@ export const useLocation = () => {
         }
         setLocationPrecision('indisponível');
         
-        // Usar localização padrão de Goiânia como fallback quando a permissão é negada
-        // Adicionar pequena variação aleatória para simular posições diferentes em testes
+        // Usar localização padrão fixa (Goiânia) como fallback quando a permissão é negada
         setLocation({
-          latitude: -16.6869 + randomVariation(),
-          longitude: -49.2648 + randomVariation(),
+          latitude: -16.6869,
+          longitude: -49.2648,
           accuracy: 1000,
           isDefault: true
         });
@@ -170,11 +382,10 @@ export const useLocation = () => {
         setError('Localização indisponível. Verifique se o GPS está ativado.');
         setLocationPrecision('indisponível');
         
-        // Usar localização padrão quando a posição está indisponível
-        // Adicionar pequena variação aleatória para simular posições diferentes em testes
+        // Usar localização padrão fixa quando a posição está indisponível
         setLocation({
-          latitude: -16.6869 + randomVariation(),
-          longitude: -49.2648 + randomVariation(),
+          latitude: -16.6869,
+          longitude: -49.2648,
           accuracy: 1000,
           isDefault: true
         });
@@ -183,11 +394,10 @@ export const useLocation = () => {
         setError('Erro ao obter localização.');
         setLocationPrecision('indisponível');
         
-        // Usar localização padrão para qualquer outro erro
-        // Adicionar pequena variação aleatória para simular posições diferentes em testes
+        // Usar localização padrão fixa para qualquer outro erro
         setLocation({
-          latitude: -16.6869 + randomVariation(),
-          longitude: -49.2648 + randomVariation(),
+          latitude: -16.6869,
+          longitude: -49.2648,
           accuracy: 1000,
           isDefault: true
         });
@@ -206,11 +416,10 @@ export const useLocation = () => {
           setError('Geolocalização não é suportada por este navegador. Usando localização padrão.');
           setLocationPrecision('baixa');
           
-          // Usar localização padrão quando a geolocalização não é suportada
-          // Adicionar pequena variação aleatória para simular posições diferentes em testes
+          // Usar localização padrão fixa quando a geolocalização não é suportada
           setLocation({
-            latitude: -16.6869 + randomVariation(),
-            longitude: -49.2648 + randomVariation(),
+            latitude: -16.6869,
+            longitude: -49.2648,
             accuracy: 1000,
             isDefault: true
           });
@@ -222,11 +431,10 @@ export const useLocation = () => {
           setError('Permissão de localização negada. Usando localização padrão.');
           setLocationPrecision('baixa');
           
-          // Usar localização padrão quando a permissão já foi negada
-          // Adicionar pequena variação aleatória para simular posições diferentes em testes
+          // Usar localização padrão fixa quando a permissão já foi negada
           setLocation({
-            latitude: -16.6869 + randomVariation(),
-            longitude: -49.2648 + randomVariation(),
+            latitude: -16.6869,
+            longitude: -49.2648,
             accuracy: 1000,
             isDefault: true
           });
@@ -259,6 +467,10 @@ export const useLocation = () => {
             }
             
             console.log(`Localização inicial obtida, precisão: ${position.coords.accuracy}m`);
+            // Se a precisão inicial for baixa, iniciar boost imediatamente
+            if (position.coords.accuracy > 100 && !boostActive) {
+              startPrecisionBoost(60000);
+            }
             
             // Agora inicia o monitoramento contínuo
             startWatchPosition(strategy);
@@ -277,6 +489,14 @@ export const useLocation = () => {
     
     // Função para iniciar o monitoramento contínuo
     const startWatchPosition = (options) => {
+      // Forçar alta precisão contínua para leituras do passageiro
+      const watchOptions = {
+        ...options,
+        enableHighAccuracy: true,
+        timeout: Math.min((options && options.timeout) || 20000, 20000),
+        maximumAge: 0
+      };
+
       watchId = navigator.geolocation.watchPosition(
         (position) => {
           setLocation({
@@ -294,6 +514,13 @@ export const useLocation = () => {
             setLocationPrecision('média');
           } else {
             setLocationPrecision('baixa');
+            // Se a precisão permanecer baixa e permissão concedida, tentar refinamento adicional
+            if (permissionStatus === 'granted') {
+              refineLowPrecision();
+              if (!boostActive) {
+                startPrecisionBoost(60000);
+              }
+            }
           }
           
           console.log(`Localização atualizada, precisão: ${position.coords.accuracy}m`);
@@ -301,7 +528,7 @@ export const useLocation = () => {
         (err) => {
           handleGeolocationError(err);
         },
-        options
+        watchOptions
       );
     };
 
@@ -311,14 +538,36 @@ export const useLocation = () => {
       if (watchId) {
         navigator.geolocation.clearWatch(watchId);
       }
+      if (boostIntervalId) clearInterval(boostIntervalId);
+      if (boostTimeoutId) clearTimeout(boostTimeoutId);
     };
   }, [currentStrategyIndex]);
+
+  // Tentar fallback aproximado se permanecer em baixa precisão por 60s
+  useEffect(() => {
+    if (coarseFallbackTried) return;
+    if (locationPrecision !== 'baixa') return;
+    const tId = setTimeout(() => {
+      if (!coarseFallbackTried && locationPrecision === 'baixa') {
+        getCoarseLocation();
+        setCoarseFallbackTried(true);
+      }
+    }, 60000);
+    return () => clearTimeout(tId);
+  }, [locationPrecision, coarseFallbackTried]);
 
   return { 
     location, 
     error, 
     permissionStatus,
     requestPermission,
-    locationPrecision
+    locationPrecision,
+    readyForMap,
+    mapCountdown,
+    // Expor utilitários para UI acionar refinamento/boost manualmente
+    refineLowPrecision,
+    startPrecisionBoost,
+    getCoarseLocation,
+    dismissLocationError
   };
 };

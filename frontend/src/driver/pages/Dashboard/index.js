@@ -10,7 +10,7 @@ const Dashboard = () => {
   const { 
     isOnline, 
     toggleStatus, 
-    currentLocation,
+    location,
     currentRide,
     stats,
     acceptRide,
@@ -62,7 +62,7 @@ const Dashboard = () => {
       {/* Mapa principal */}
       <main className="flex-1 relative">
         <Map 
-          center={currentLocation}
+          center={location}
           isOnline={isOnline}
           currentRide={currentRide}
         />

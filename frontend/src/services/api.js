@@ -1,11 +1,15 @@
 import axios from 'axios';
 
-// Add a check for the API URL
-const API_URL = process.env.REACT_APP_API_URL;
+// Resolve API base URL for development and production
+let API_URL = process.env.REACT_APP_API_URL;
 
-if (process.env.NODE_ENV === 'development' && API_URL?.includes('3010')) {
-  console.warn('REACT_APP_API_URL aponta para 3010; ajustando para 5001 em desenvolvimento.');
-  API_URL = 'http://localhost:5001';
+// Fallbacks for development: prefer 5001 when undefined or misconfigured
+if (process.env.NODE_ENV === 'development') {
+  const shouldFallback = !API_URL || /localhost:3010/.test(API_URL);
+  if (shouldFallback) {
+    console.warn('Using fallback API URL: http://localhost:5000');
+    API_URL = 'http://localhost:5000';
+  }
 }
 
 const baseURL = `${API_URL}/api`;
