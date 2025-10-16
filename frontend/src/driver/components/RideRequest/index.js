@@ -182,10 +182,13 @@ const RideRequest = ({ ride }) => {
                   Chegar e iniciar (teste)
                 </button>
               )}
-              {/* Finalizar corrida (teste) também disponível quando corrida aceita (dev) */}
+              {/* Finalizar corrida disponível quando corrida aceita (somente dev) */}
               {process.env.NODE_ENV !== 'production' && (
                 <button
-                  className="flex-1 py-2 text-white bg-green-700 rounded-lg hover:bg-green-800"
+                  disabled={isLoading}
+                  className={`flex-1 py-2 text-white rounded-lg ${
+                    isLoading ? 'bg-gray-400 opacity-50 cursor-not-allowed' : 'bg-green-700 hover:bg-green-800'
+                  }`}
                   onClick={async () => {
                     if (isLoading) return;
                     setIsLoading(true);
@@ -194,19 +197,19 @@ const RideRequest = ({ ride }) => {
                       await toast.promise(
                         completeRide(rideId),
                         {
-                          loading: 'Finalizando corrida (teste)...',
-                          success: 'Corrida finalizada (teste)!',
+                          loading: 'Finalizando corrida...',
+                          success: 'Corrida finalizada!',
                           error: (err) => `Erro ao finalizar: ${err.message}`
                         }
                       );
                     } catch (error) {
-                      logger.error('Erro ao finalizar corrida (teste):', error);
+                      logger.error('Erro ao finalizar corrida:', error);
                     } finally {
                       setIsLoading(false);
                     }
                   }}
                 >
-                  Finalizar Corrida (teste)
+                  {isLoading ? 'Finalizando...' : 'Finalizar Corrida'}
                 </button>
               )}
               <button
@@ -220,10 +223,13 @@ const RideRequest = ({ ride }) => {
               </button>
             </>
           )}
-          {/* Quando estiver em andamento, exibir botão de finalizar (teste) dentro deste bloco (dev) */}
-          {isInProgress && process.env.NODE_ENV !== 'production' && (
+          {/* Quando estiver em andamento, exibir botão de finalizar (produção + dev) */}
+          {isInProgress && (
             <button
-              className="flex-1 py-2 text-white bg-green-700 rounded-lg hover:bg-green-800"
+              disabled={isLoading}
+              className={`flex-1 py-2 text-white rounded-lg ${
+                isLoading ? 'bg-gray-400 opacity-50 cursor-not-allowed' : 'bg-green-700 hover:bg-green-800'
+              }`}
               onClick={async () => {
                 if (isLoading) return;
                 setIsLoading(true);
@@ -232,19 +238,19 @@ const RideRequest = ({ ride }) => {
                   await toast.promise(
                     completeRide(rideId),
                     {
-                      loading: 'Finalizando corrida (teste)...',
-                      success: 'Corrida finalizada (teste)!',
+                      loading: 'Finalizando corrida...',
+                      success: 'Corrida finalizada!',
                       error: (err) => `Erro ao finalizar: ${err.message}`
                     }
                   );
                 } catch (error) {
-                  logger.error('Erro ao finalizar corrida (teste):', error);
+                  logger.error('Erro ao finalizar corrida:', error);
                 } finally {
                   setIsLoading(false);
                 }
               }}
             >
-              Finalizar Corrida (teste)
+              {isLoading ? 'Finalizando...' : 'Finalizar Corrida'}
             </button>
           )}
         </div>

@@ -2,11 +2,12 @@ import axios from 'axios';
 
 // Add a check for the API URL
 const API_URL = process.env.REACT_APP_API_URL;
-if (!API_URL) {
-  console.error('REACT_APP_API_URL is not defined in environment variables');
+
+if (process.env.NODE_ENV === 'development' && API_URL?.includes('3010')) {
+  console.warn('REACT_APP_API_URL aponta para 3010; ajustando para 5001 em desenvolvimento.');
+  API_URL = 'http://localhost:5001';
 }
 
-// Usar a URL diretamente sem proxy CORS
 const baseURL = `${API_URL}/api`;
 console.log('Using API URL:', baseURL);
 

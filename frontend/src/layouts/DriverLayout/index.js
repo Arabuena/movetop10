@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import { useDriver } from '../../driver/contexts/DriverContext';
 
+// Componente: DriverLayout
 const DriverLayout = () => {
   const { currentRide, acceptRide, isUpdating } = useDriver();
   const isPending = currentRide && (currentRide.status === 'pending' || currentRide.status === 'requested');
@@ -17,7 +18,7 @@ const DriverLayout = () => {
             <Outlet />
           </div>
         </main>
-        {/* Botão fixo: aceitar corrida quando houver uma pendente */}
+        {/* removido: botão fixo de aceitar corrida pendente */}
         {isPending && (
           <button
             onClick={async () => {

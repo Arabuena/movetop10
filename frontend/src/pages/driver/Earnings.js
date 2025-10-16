@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSocket } from '../../contexts/SocketContext';
+import api from '../../services/api';
 import { formatPrice } from '../../utils/rideCalculator';
 import { 
   CurrencyDollarIcon, 
@@ -11,23 +11,47 @@ import {
 const DriverEarnings = () => {
   const [earnings, setEarnings] = useState(null);
   const [loading, setLoading] = useState(true);
-  const { socket } = useSocket();
 
   useEffect(() => {
-    if (!socket) {
-      console.log('Socket não disponível');
-      return;
-    }
+    let isMounted = true;
+    (async () => {
+      try {
+        const { data } = await api.get('/driver/earnings');
+        const total = Number(data?.earnings || 0);
+        const rides = Array.isArray(data?.rides) ? data.rides : [];
+        const totalRides = rides.length;
+        const averagePerRide = totalRides ? total / totalRides : 0;
+        const ratings = rides
+          .map(r => {
+            const drv = r.rating && (r.rating.driver || r.rating?.driverScore);
+            return typeof drv === 'number' ? drv : null;
+          })
+          .filter(v => v !== null);
+        const rating = ratings.length ? (
+          ratings.reduce((a, b) => a + b, 0) / ratings.length
+        ) : 0;
 
-    console.log('Solicitando dados de ganhos...');
-    socket.emit('driver:getEarnings', {}, (response) => {
-      console.log('Resposta recebida:', response);
-      if (response.success) {
-        setEarnings(response.earnings);
+        const byDay = new Map();
+        rides.forEach(r => {
+          const when = r.updatedAt ? new Date(r.updatedAt) : new Date(r.createdAt);
+          const key = when.toISOString().split('T')[0];
+          const current = byDay.get(key) || { date: key, total: 0, rides: 0 };
+          current.total += r.price || 0;
+          current.rides += 1;
+          byDay.set(key, current);
+        });
+        const dailyEarnings = Array.from(byDay.values())
+          .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        if (isMounted) setEarnings({ total, totalRides, averagePerRide, rating, dailyEarnings });
+      } catch (err) {
+        console.error('Erro ao buscar ganhos do motorista:', err);
+      } finally {
+        if (isMounted) setLoading(false);
       }
-      setLoading(false);
-    });
-  }, [socket]);
+    })();
+    return () => { isMounted = false; };
+  }, []);
 
   if (loading) {
     return (
@@ -127,4 +151,4 @@ const DriverEarnings = () => {
   );
 };
 
-export default DriverEarnings; 
+export default DriverEarnings;

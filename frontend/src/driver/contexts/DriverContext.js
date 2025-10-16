@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useSocket } from '../../contexts/SocketContext';
 import useLocation from '../hooks/useLocation';
 import logger from '../../utils/logger';
+import api from '../../services/api';
 
 const DriverContext = createContext({});
 
@@ -22,6 +23,54 @@ export const DriverProvider = ({ children }) => {
     rating: 0,
     todayEarnings: 0
   });
+
+  // Helper para calcular estatísticas do cabeçalho a partir do histórico
+  const computeStatsFromRides = useCallback((rides = []) => {
+    try {
+      const today = new Date();
+      const isSameDay = (d1, d2) => (
+        d1.getDate() === d2.getDate() &&
+        d1.getMonth() === d2.getMonth() &&
+        d1.getFullYear() === d2.getFullYear()
+      );
+
+      const completedRides = rides.filter(r => r.status === 'completed');
+      const ridesToday = completedRides.filter(r => {
+        const when = r.updatedAt ? new Date(r.updatedAt) : new Date(r.createdAt);
+        return isSameDay(today, when);
+      });
+
+      const todayEarnings = ridesToday.reduce((sum, r) => sum + (r.price || 0), 0);
+      const totalRides = ridesToday.length;
+
+      const ratings = completedRides
+        .map(r => {
+          const drv = r.rating && (r.rating.driver || r.rating?.driverScore);
+          return typeof drv === 'number' ? drv : null;
+        })
+        .filter(v => v !== null);
+      const rating = ratings.length
+        ? ratings.reduce((a, b) => a + b, 0) / ratings.length
+        : 0;
+
+      setStats({ todayEarnings, totalRides, rating });
+    } catch (err) {
+      logger.error('Erro ao calcular estatísticas do motorista:', err);
+    }
+  }, [logger]);
+
+  // Buscar histórico de corridas via REST e atualizar estatísticas
+  const fetchDriverRidesForStats = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data } = await api.get('/driver/rides');
+      if (Array.isArray(data)) {
+        computeStatsFromRides(data);
+      }
+    } catch (err) {
+      logger.warn('Falha ao buscar corridas do motorista para estatísticas:', err?.message || err);
+    }
+  }, [user, computeStatsFromRides, logger]);
 
   // Normaliza payloads de eventos de corrida para garantir que tenha status e IDs
   const normalizeRideData = (data) => {
@@ -203,6 +252,8 @@ export const DriverProvider = ({ children }) => {
     socket.on('driver:rideCompleted', () => {
       logger.debug('Corrida finalizada');
       setCurrentRide(null);
+      // Atualiza estatísticas após finalizar corrida
+      fetchDriverRidesForStats();
     });
 
     socket.on('driver:statsUpdated', (newStats) => {
@@ -225,6 +276,11 @@ export const DriverProvider = ({ children }) => {
       socket.off('driver:statsUpdated');
     };
   }, [socket, logger]);
+
+  // Atualiza estatísticas ao conectar ou quando usuário estiver disponível
+  useEffect(() => {
+    fetchDriverRidesForStats();
+  }, [fetchDriverRidesForStats]);
 
   // Enviar localização quando online
   useEffect(() => {
@@ -282,16 +338,31 @@ export const DriverProvider = ({ children }) => {
     }
   }, [socket]);
 
-  const completeRide = async (rideId) => {
-    try {
-      socket.emit('driver:completeRide', { rideId });
-      logger.debug('Finalizando corrida:', rideId);
-      setCurrentRide(null);
-    } catch (error) {
-      logger.error('Erro ao finalizar corrida:', error);
-      throw error;
+  const completeRide = useCallback(async (rideId) => {
+    if (!socket || !connected) {
+      throw new Error('Socket não está conectado');
     }
-  };
+
+    logger.debug('Tentando finalizar corrida:', rideId);
+
+    return new Promise((resolve, reject) => {
+      socket.emit('driver:completeRide', { rideId }, (response) => {
+        if (response && response.success) {
+          logger.debug('Corrida finalizada com sucesso:', response.ride);
+          setCurrentRide(null);
+          resolve(response.ride);
+        } else {
+          const err = response?.error || 'Erro ao finalizar corrida';
+          logger.error('Erro ao finalizar corrida:', err);
+          reject(new Error(err));
+        }
+      });
+
+      setTimeout(() => {
+        reject(new Error('Tempo esgotado ao finalizar corrida'));
+      }, 10000);
+    });
+  }, [socket, connected]);
 
   const startRide = useCallback(async (rideId) => {
     if (!socket || !connected) {
