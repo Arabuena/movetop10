@@ -46,3 +46,7 @@ yarn-error.log*
 /app-debug.apk
 /qr-app-release.png
 /qr-app-debug.png
+
+# Android Gradle cache
+/android/.gradle/
+/.gradle/
