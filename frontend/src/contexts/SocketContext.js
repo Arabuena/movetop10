@@ -24,15 +24,33 @@ export const SocketProvider = ({ children }) => {
     }
 
     if (!socketRef.current) {
+      const getBackendUrl = () => {
+        let url = process.env.REACT_APP_API_URL;
+        if (typeof window !== 'undefined') {
+          const isWebView = !!window.ReactNativeWebView || !!window.Android;
+          const isLocalhost = url && /localhost/i.test(url);
+          if (isWebView && isLocalhost) {
+            const host = window.location?.hostname;
+            if (host && /^(\d{1,3}\.){3}\d{1,3}$/.test(host)) {
+              url = `http://${host}:5000`;
+              console.warn('Socket backend URL ajustado para Android WebView:', url);
+            }
+          }
+        }
+        return url;
+      };
+
+      const backendUrl = getBackendUrl();
+
       console.log('SocketContext: Criando nova conexão socket', {
-        url: process.env.REACT_APP_API_URL,
+        url: backendUrl,
         userId: user._id,
         userType: user.userType,
         hasToken: !!localStorage.getItem('token')
       });
       
       // Usando a URL correta do backend definida no .env.development
-      socketRef.current = io(process.env.REACT_APP_API_URL, {
+      socketRef.current = io(backendUrl, {
         transports: ['websocket', 'polling'],
         reconnection: true,
         reconnectionAttempts: 10,

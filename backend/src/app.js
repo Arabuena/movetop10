@@ -12,46 +12,38 @@ const requestLogger = require('./middleware/requestLogger');
 
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: {
-    origin: [
-      process.env.FRONTEND_URL || 'http://localhost:3000',
-      'http://localhost:3001',
-      'http://localhost:3002',
-      'http://localhost:3012',
-      'http://localhost:3013',
-      'http://localhost:3015',
-      'http://localhost:3010',
-      'http://localhost:3011',
-      'http://localhost:3055',
-      'http://localhost:3056',
-      'https://movetop10.onrender.com'
-    ],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization']
-  }
-});
+const isDev = process.env.NODE_ENV !== 'production';
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3002',
+  'http://localhost:3012',
+  'http://localhost:3013',
+  'http://localhost:3015',
+  'http://localhost:3010',
+  'http://localhost:3011',
+  'http://localhost:3055',
+  'http://localhost:3056',
+  'http://localhost:3030',
+  'https://movetop10.onrender.com'
+];
+const originRegexDev3030 = /^http:\/\/\d{1,3}(\.\d{1,3}){3}:3030$/;
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin) || (isDev && originRegexDev3030.test(origin))) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+const io = new Server(httpServer, { cors: corsOptions });
 
 // Middlewares
-app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL || 'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002',
-    'http://localhost:3012',
-    'http://localhost:3013',
-    'http://localhost:3015',
-    'http://localhost:3010',
-    'http://localhost:3011',
-    'http://localhost:3055',
-    'http://localhost:3056',
-    'https://movetop10.onrender.com'
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(requestLogger);
 

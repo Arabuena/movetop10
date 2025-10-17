@@ -3,6 +3,20 @@ import axios from 'axios';
 // Resolve API base URL for development and production
 let API_URL = process.env.REACT_APP_API_URL;
 
+// Ajuste automático para Android WebView: quando API aponta para localhost,
+// usar o host atual da WebView e porta 5000
+if (typeof window !== 'undefined') {
+  const isWebView = !!window.ReactNativeWebView || !!window.Android;
+  const isLocalhost = API_URL && /localhost/i.test(API_URL);
+  if (isWebView && isLocalhost) {
+    const host = window.location?.hostname;
+    if (host && /^(\d{1,3}\.){3}\d{1,3}$/.test(host)) {
+      API_URL = `http://${host}:5000`;
+      console.warn('API_URL ajustado para Android WebView:', API_URL);
+    }
+  }
+}
+
 // Fallbacks for development: prefer 5001 when undefined or misconfigured
 if (process.env.NODE_ENV === 'development') {
   const shouldFallback = !API_URL || /localhost:3010/.test(API_URL);

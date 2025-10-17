@@ -24,3 +24,25 @@ yarn-error.log*
 
 # OS
 .DS_Store 
+
+# Android build outputs
+/android/app/build/
+/android/app/build/outputs/
+
+# Android local config and secrets
+/android/local.properties
+/android/keystore/
+
+# Android local Gradle distributions and zips
+/android/gradle-*/
+/android/gradle-*-bin.zip
+
+# Android platform tools binaries
+/android/platform-tools/
+/android/platform-tools.zip
+
+# APKs and QR assets at repo root
+/app-release.apk
+/app-debug.apk
+/qr-app-release.png
+/qr-app-debug.png
