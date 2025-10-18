@@ -97,6 +97,46 @@ const RideRequest = ({ ride }) => {
 
   // Se a corrida já foi aceita, mostrar interface de corrida em andamento
   if (isAccepted || isInProgress) {
+    const isAndroid = !!window.Android;
+    const navTarget = isInProgress ? ride?.destination : ride?.origin;
+
+    const handleNavigateExternal = () => {
+      try {
+        if (!navTarget || typeof navTarget.lat !== 'number' || typeof navTarget.lng !== 'number') {
+          toast.error('Destino inválido para navegação');
+          return;
+        }
+        const label = navTarget.address || (isInProgress ? 'Destino' : 'Origem');
+        if (isAndroid && window.Android?.openExternalNavigation) {
+          window.Android.openExternalNavigation(navTarget.lat, navTarget.lng, label);
+        } else {
+          const url = `https://www.google.com/maps/dir/?api=1&destination=${navTarget.lat},${navTarget.lng}&travelmode=driving`;
+          window.open(url, '_blank');
+        }
+      } catch (e) {
+        logger.error('Erro ao abrir navegação externa:', e);
+        toast.error('Não foi possível abrir a navegação');
+      }
+    };
+
+    const handleNavigateBrowser = () => {
+      try {
+        if (!navTarget || typeof navTarget.lat !== 'number' || typeof navTarget.lng !== 'number') {
+          toast.error('Destino inválido para navegação');
+          return;
+        }
+        if (isAndroid && window.Android?.openBrowserDirections) {
+          window.Android.openBrowserDirections(navTarget.lat, navTarget.lng);
+        } else {
+          const url = `https://www.google.com/maps/dir/?api=1&destination=${navTarget.lat},${navTarget.lng}&travelmode=driving`;
+          window.open(url, '_blank');
+        }
+      } catch (e) {
+        logger.error('Erro ao abrir navegador:', e);
+        toast.error('Não foi possível abrir o navegador');
+      }
+    };
+
     return (
       <div className="fixed bottom-0 left-0 right-0 bg-white shadow-lg rounded-t-xl p-4">
         <div className="flex justify-between items-start mb-4">
@@ -118,6 +158,24 @@ const RideRequest = ({ ride }) => {
               {isAccepted ? 'A caminho do passageiro' : 'Em andamento'}
             </p>
           </div>
+        </div>
+
+        {/* Opções de navegação */}
+        <div className="flex gap-3 mb-3">
+          <button
+            className="flex-1 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+            onClick={handleNavigateBrowser}
+            title="Navegar pelo navegador"
+          >
+            Navegar (Navegador)
+          </button>
+          <button
+            className="flex-1 py-2 text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+            onClick={handleNavigateExternal}
+            title="Navegar por GPS externo"
+          >
+            Navegar (GPS externo)
+          </button>
         </div>
 
         <div className="flex gap-3">

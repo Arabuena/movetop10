@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useCallback, useState } from 'react';
+import React, { createContext, useContext, useEffect, useCallback, useState, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSocket } from '../../contexts/SocketContext';
 import useLocation from '../hooks/useLocation';
@@ -23,6 +23,91 @@ export const DriverProvider = ({ children }) => {
     rating: 0,
     todayEarnings: 0
   });
+
+  // Alerta sonoro para novas chamadas (pendente/requested)
+  const alertAudioRef = useRef(null);
+  const gestureCleanupRef = useRef(null);
+  const startAlertSound = useCallback(() => {
+    try {
+      if (alertAudioRef.current) return; // já tocando
+
+      const candidates = ['/sounds/driver-alert-sax.mp3', '/sounds/new-ride.mp3'];
+      const audio = new Audio();
+      audio.loop = true;
+      audio.volume = 1.0;
+
+      const setupGestureFallback = (tryPlay) => {
+        try {
+          const handler = () => {
+            tryPlay().then(() => {
+              alertAudioRef.current = audio;
+              logger.debug('Som de alerta iniciado após gesto do usuário:', audio.src);
+              if (gestureCleanupRef.current) {
+                gestureCleanupRef.current();
+                gestureCleanupRef.current = null;
+              }
+            }).catch((err) => {
+              logger.warn('Falha ao reproduzir som mesmo após gesto:', err?.message || err);
+            });
+          };
+          document.addEventListener('click', handler, { once: true });
+          document.addEventListener('touchstart', handler, { once: true });
+          gestureCleanupRef.current = () => {
+            document.removeEventListener('click', handler);
+            document.removeEventListener('touchstart', handler);
+          };
+          logger.debug('Gestos registrados para desbloquear reprodução de áudio');
+        } catch (e) {
+          logger.warn('Falha ao registrar gestos para áudio:', e?.message || e);
+        }
+      };
+
+      const attempt = (idx) => {
+        if (idx >= candidates.length) {
+          console.warn('Nenhum som de alerta pôde ser reproduzido');
+          return;
+        }
+        const src = candidates[idx];
+        audio.src = src;
+        audio.load();
+        audio.play().then(() => {
+          alertAudioRef.current = audio;
+          logger.debug('Som de alerta iniciado:', audio.src);
+        }).catch((err) => {
+          const msg = err?.message || String(err);
+          logger.warn('Falha ao tocar som, tentando próximo:', { src, err: msg });
+          // Configura fallback por gesto do usuário para o mesmo src
+          setupGestureFallback(() => {
+            return audio.play();
+          });
+          // Segue tentando próximo candidato também
+          attempt(idx + 1);
+        });
+      };
+
+      attempt(0);
+    } catch (e) {
+      logger.error('Erro ao iniciar som de alerta:', e);
+    }
+  }, [logger]);
+
+  const stopAlertSound = useCallback(() => {
+    try {
+      const audio = alertAudioRef.current;
+      if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
+        alertAudioRef.current = null;
+        logger.debug('Som de alerta parado');
+      }
+      if (gestureCleanupRef.current) {
+        gestureCleanupRef.current();
+        gestureCleanupRef.current = null;
+      }
+    } catch (e) {
+      logger.error('Erro ao parar som de alerta:', e);
+    }
+  }, [logger]);
 
   // Helper para calcular estatísticas do cabeçalho a partir do histórico
   const computeStatsFromRides = useCallback((rides = []) => {
@@ -176,7 +261,7 @@ export const DriverProvider = ({ children }) => {
 
   // Buscar corrida ativa ao conectar
   useEffect(() => {
-    if (!socket || !connected || !user) return;
+    if (!socket || !connected) return;
 
     const fetchActiveRide = () => {
       logger.debug('Buscando corrida ativa...');
@@ -222,6 +307,8 @@ export const DriverProvider = ({ children }) => {
       const normalized = normalizeRideData(ride);
       setCurrentRide(normalized);
       console.log('🚗 [DRIVER CONTEXT] currentRide atualizado (normalizado) para:', normalized);
+      // Iniciar alerta sonoro enquanto está pendente
+      startAlertSound();
     });
 
     socket.on('driver:newRideAvailable', (data) => {
@@ -232,26 +319,38 @@ export const DriverProvider = ({ children }) => {
       const normalized = normalizeRideData(data);
       setCurrentRide(normalized);
       console.log('🆕 [DRIVER CONTEXT] currentRide atualizado para (normalizado):', normalized);
+      // Iniciar alerta sonoro enquanto está pendente
+      startAlertSound();
     });
 
     socket.on('driver:rideAccepted', (ride) => {
       logger.debug('Corrida aceita:', ride);
       setCurrentRide(ride);
+      // Parar som ao aceitar
+      stopAlertSound();
     });
 
     socket.on('driver:rideUpdated', (ride) => {
       logger.debug('Corrida atualizada:', ride);
       setCurrentRide(ride);
+      const status = ride?.status;
+      if (status === 'pending' || status === 'requested') {
+        startAlertSound();
+      } else {
+        stopAlertSound();
+      }
     });
 
     socket.on('driver:rideCancelled', () => {
       logger.debug('Corrida cancelada');
       setCurrentRide(null);
+      stopAlertSound();
     });
 
     socket.on('driver:rideCompleted', () => {
       logger.debug('Corrida finalizada');
       setCurrentRide(null);
+      stopAlertSound();
       // Atualiza estatísticas após finalizar corrida
       fetchDriverRidesForStats();
     });
@@ -275,7 +374,17 @@ export const DriverProvider = ({ children }) => {
       socket.off('driver:rideCompleted');
       socket.off('driver:statsUpdated');
     };
-  }, [socket, logger]);
+  }, [socket, logger, isOnline, startAlertSound, stopAlertSound]);
+
+  // Também reagir a mudanças de status locais
+  useEffect(() => {
+    const status = currentRide?.status;
+    if (status === 'pending' || status === 'requested') {
+      startAlertSound();
+    } else {
+      stopAlertSound();
+    }
+  }, [currentRide, startAlertSound, stopAlertSound]);
 
   // Atualiza estatísticas ao conectar ou quando usuário estiver disponível
   useEffect(() => {
@@ -452,7 +561,6 @@ export const DriverProvider = ({ children }) => {
     }
   }, [socket, connected]);
 
-  // Método de teste: marcar chegada e iniciar imediatamente
   const arriveAndStart = useCallback(async (rideId) => {
     if (!socket || !connected) {
       throw new Error('Socket não está conectado');

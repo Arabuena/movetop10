@@ -145,6 +145,32 @@ class MainActivity : AppCompatActivity() {
                 )
             }
         }
+
+        @JavascriptInterface
+        fun openExternalNavigation(lat: Double, lng: Double, label: String?) {
+            try {
+                val safeLabel = (label ?: "Destino").replace("(", "").replace(")", "")
+                val uri = android.net.Uri.parse("geo:0,0?q=${'$'}lat,${'$'}lng(${ '$' }safeLabel)")
+                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                val chooser = android.content.Intent.createChooser(intent, "Escolher app de navegação")
+                activity.startActivity(chooser)
+            } catch (e: Exception) {
+                logError("Falha ao abrir navegação externa: ${'$'}{e.message}")
+            }
+        }
+
+        @JavascriptInterface
+        fun openBrowserDirections(lat: Double, lng: Double) {
+            try {
+                val url = "https://www.google.com/maps/dir/?api=1&destination=${'$'}lat,${'$'}lng&travelmode=driving"
+                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                activity.startActivity(intent)
+            } catch (e: Exception) {
+                logError("Erro ao abrir navegador: ${'$'}{e.message}")
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
