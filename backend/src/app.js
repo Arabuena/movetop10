@@ -26,13 +26,15 @@ const allowedOrigins = [
   'http://localhost:3056',
   'http://localhost:3030',
   'http://localhost:3031',
+  'http://localhost:3100',
   'https://movetop10.onrender.com'
 ];
 const originRegexDev3030 = /^http:\/\/\d{1,3}(\.\d{1,3}){3}:3030$/;
+const originRegexDev3100 = /^http:\/\/\d{1,3}(\.\d{1,3}){3}:3100$/;
 const corsOptions = {
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin) || (isDev && originRegexDev3030.test(origin))) {
+    if (allowedOrigins.includes(origin) || (isDev && (originRegexDev3030.test(origin) || originRegexDev3100.test(origin)))) {
       return callback(null, true);
     }
     return callback(new Error('Not allowed by CORS'));
