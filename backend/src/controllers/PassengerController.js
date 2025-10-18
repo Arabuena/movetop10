@@ -148,7 +148,28 @@ const PassengerController = {
       console.error('Erro ao calcular multiplicador:', error);
       return res.status(500).json({ error: 'Erro ao calcular multiplicador' });
     }
-  }
+  },
+  async updateAvatar(req, res) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+      }
+
+      const base = `${req.protocol}://${req.get('host')}`;
+      const filename = req.file.filename;
+      const avatarUrl = `${base}/uploads/avatars/${filename}`;
+
+      const user = await User.findByIdAndUpdate(
+        req.user.id,
+        { $set: { avatarUrl } },
+        { new: true }
+      ).select('-__v');
+
+      return res.json(user);
+    } catch (error) {
+      return res.status(500).json({ error: 'Erro ao atualizar avatar' });
+    }
+  },
 };
 
-module.exports = PassengerController; 
+module.exports = PassengerController;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
@@ -10,17 +10,27 @@ import {
   XMarkIcon 
 } from '@heroicons/react/24/outline';
 import Logo from '../components/common/Logo';
+import { useSocket } from '../contexts/SocketContext';
 
 const PassengerLayout = () => {
   const { logout, user } = useAuth();
+  const { socket, connected } = useSocket();
   const [showMenu, setShowMenu] = useState(false);
+  const [hasActiveRide, setHasActiveRide] = useState(false);
   const location = useLocation();
+
+  useEffect(() => {
+    if (!socket || !connected) return;
+    socket.emit('passenger:getActiveRide', null, (response) => {
+      setHasActiveRide(!!response?.ride);
+    });
+  }, [socket, connected]);
 
   const menuItems = [
     { 
       path: '/passenger',
       icon: HomeIcon, 
-      text: 'Início'
+      text: 'Marcar Corrida'
     },
     { 
       path: '/passenger/rides',
@@ -94,6 +104,11 @@ const PassengerLayout = () => {
               >
                 <item.icon className="h-5 w-5 mr-3" />
                 {item.text}
+                {item.path === '/passenger/rides' && hasActiveRide && (
+                  <span className="ml-auto text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                    Ativa
+                  </span>
+                )}
               </Link>
             ))}
 
@@ -124,4 +139,4 @@ const PassengerLayout = () => {
   );
 };
 
-export default PassengerLayout; 
+export default PassengerLayout;

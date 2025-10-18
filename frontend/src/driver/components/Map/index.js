@@ -31,12 +31,23 @@ const Map = ({ center, isOnline, currentRide }) => {
   const [directions, setDirections] = useState(null);
 
   useEffect(() => {
-    // Quando há corrida aceita ou em andamento, calcular rota até o passageiro (accepted) ou destino (in_progress)
+    // Calcular rota para os seguintes estados:
+    // - accepted: motorista -> origem
+    // - in_progress: motorista -> destino
+    // - pending/requested: origem -> destino (pré-visualização antes de aceitar)
     try {
       if (!isLoaded || !window.google || !window.google.maps) return;
-      const shouldShowRoute = currentRide && (currentRide.status === 'accepted' || currentRide.status === 'in_progress');
 
-      // Centro efetivo: usa centro real se precisão <= 100m; caso contrário, usa origem da corrida se disponível
+      const hasRide = !!currentRide;
+      if (!hasRide) {
+        setDirections(null);
+        return;
+      }
+
+      const status = currentRide.status;
+      const shouldShowRoute = ['accepted', 'in_progress', 'pending', 'requested'].includes(status);
+
+      // Centro efetivo para casos onde usamos a localização do motorista
       const effectiveCenter = (() => {
         if (center && typeof center.accuracy === 'number' && center.accuracy <= 100 && !center.isDefault) {
           return center;
@@ -47,22 +58,27 @@ const Map = ({ center, isOnline, currentRide }) => {
         return null;
       })();
 
-      if (!effectiveCenter || !currentRide || !shouldShowRoute) {
+      if (!shouldShowRoute) {
         setDirections(null);
         return;
       }
 
-      const status = currentRide.status;
-      const destination =
-        status === 'in_progress'
-          ? currentRide?.destination
-            ? { lat: currentRide.destination.lat, lng: currentRide.destination.lng }
-            : null
-          : currentRide?.origin
-            ? { lat: currentRide.origin.lat, lng: currentRide.origin.lng }
-            : null;
+      // Definir origem/destino da rota conforme o status
+      let originForRoute = null;
+      let destinationForRoute = null;
 
-      if (!destination) {
+      if (status === 'in_progress') {
+        originForRoute = effectiveCenter;
+        destinationForRoute = currentRide?.destination ? { lat: currentRide.destination.lat, lng: currentRide.destination.lng } : null;
+      } else if (status === 'accepted') {
+        originForRoute = effectiveCenter;
+        destinationForRoute = currentRide?.origin ? { lat: currentRide.origin.lat, lng: currentRide.origin.lng } : null;
+      } else if (status === 'pending' || status === 'requested') {
+        originForRoute = currentRide?.origin ? { lat: currentRide.origin.lat, lng: currentRide.origin.lng } : null;
+        destinationForRoute = currentRide?.destination ? { lat: currentRide.destination.lat, lng: currentRide.destination.lng } : null;
+      }
+
+      if (!originForRoute || !destinationForRoute) {
         setDirections(null);
         return;
       }
@@ -70,8 +86,8 @@ const Map = ({ center, isOnline, currentRide }) => {
       const directionsService = new window.google.maps.DirectionsService();
       directionsService.route(
         {
-          origin: effectiveCenter,
-          destination,
+          origin: originForRoute,
+          destination: destinationForRoute,
           travelMode: window.google.maps.TravelMode.DRIVING
         },
         (result, statusResult) => {
@@ -168,9 +184,15 @@ const Map = ({ center, isOnline, currentRide }) => {
           directions={directions}
           options={{
             suppressMarkers: true,
-            preserveViewport: true,
+            // Para pré-visualização (pending/requested), ajustar viewport para caber rota
+            preserveViewport: !(currentRide?.status === 'pending' || currentRide?.status === 'requested'),
             polylineOptions: {
-              strokeColor: currentRide?.status === 'in_progress' ? '#10B981' : '#3B82F6',
+              strokeColor:
+                currentRide?.status === 'in_progress'
+                  ? '#10B981' // verde durante a viagem
+                  : (currentRide?.status === 'pending' || currentRide?.status === 'requested')
+                    ? '#F59E0B' // âmbar na pré-visualização
+                    : '#3B82F6', // azul quando aceito e a caminho
               strokeOpacity: 0.9,
               strokeWeight: 6
             }

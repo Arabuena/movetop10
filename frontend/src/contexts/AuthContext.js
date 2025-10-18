@@ -75,16 +75,66 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Atualizar perfil do usuário (passageiro)
+  const updateUser = async (updates) => {
+    try {
+      setLoading(true);
+      const response = await api.put('/passenger/profile', updates);
+      const updatedUser = response.data;
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+      return { success: true, user: updatedUser };
+    } catch (error) {
+      console.error('AuthContext: Erro ao atualizar perfil', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      return { success: false, error: error.response?.data?.error || error.message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Upload de avatar (foto de perfil)
+  const uploadAvatar = async (file) => {
+    try {
+      setLoading(true);
+      const formData = new FormData();
+      formData.append('avatar', file);
+      console.debug('AuthContext.uploadAvatar: enviando arquivo', { name: file?.name, type: file?.type, size: file?.size, baseURL: api.defaults.baseURL });
+      const response = await api.post('/passenger/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      console.debug('AuthContext.uploadAvatar: resposta recebida', { status: response.status, data: response.data });
+      const updatedUser = response.data;
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+      console.debug('AuthContext.uploadAvatar: user atualizado no contexto/localStorage', { avatarUrl: updatedUser?.avatarUrl });
+      return { success: true, user: updatedUser };
+    } catch (error) {
+      console.error('AuthContext: Erro no upload do avatar', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      return { success: false, error: error.response?.data?.error || error.message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Adicionar função de logout ausente
   const logout = () => {
-    const userType = user?.userType || 'passenger'; // Guarda o userType antes de limpar
+    setToken(null);
     setUser(null);
-    localStorage.removeItem('user');
     localStorage.removeItem('token');
-    window.location.href = '/login/' + userType;
+    localStorage.removeItem('user');
+    delete api.defaults.headers.common['Authorization'];
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, uploadAvatar }}>
       {children}
     </AuthContext.Provider>
   );
