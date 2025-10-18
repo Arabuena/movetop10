@@ -50,3 +50,7 @@ yarn-error.log*
 # Android Gradle cache
 /android/.gradle/
 /.gradle/
+
+# Backend uploads (não versionar arquivos enviados)
+/backend/uploads/
+/backend/uploads/avatars/

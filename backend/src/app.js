@@ -25,6 +25,7 @@ const allowedOrigins = [
   'http://localhost:3055',
   'http://localhost:3056',
   'http://localhost:3030',
+  'http://localhost:3031',
   'https://movetop10.onrender.com'
 ];
 const originRegexDev3030 = /^http:\/\/\d{1,3}(\.\d{1,3}){3}:3030$/;
@@ -46,6 +47,10 @@ const io = new Server(httpServer, { cors: corsOptions });
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(requestLogger);
+
+// Servir arquivos enviados (avatars)
+// Corrige caminho: de '../../uploads' para '../uploads' (backend/uploads)
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Socket.IO events
 require('./socket')(io);
