@@ -48,16 +48,21 @@ const useAndroidLocation = () => {
     checkGPSStatus();
 
     // Listener para atualizações de localização
-    const handleLocationUpdate = (locationStr) => {
+    const handleLocationUpdate = (payload) => {
       try {
-        const locationData = JSON.parse(locationStr);
-        setLocation({
-          lat: locationData.latitude,
-          lng: locationData.longitude,
-          accuracy: locationData.accuracy,
-          timestamp: Date.now()
-        });
-        setError(null);
+        // A interface Android injeta um objeto literal (não string)
+        const data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+        const lat = typeof data.lat === 'number' ? data.lat : (typeof data.latitude === 'number' ? data.latitude : null);
+        const lng = typeof data.lng === 'number' ? data.lng : (typeof data.longitude === 'number' ? data.longitude : null);
+        const accuracy = typeof data.accuracy === 'number' ? data.accuracy : null;
+        const timestamp = typeof data.timestamp === 'number' ? data.timestamp : Date.now();
+
+        if (lat != null && lng != null) {
+          setLocation({ lat, lng, accuracy, timestamp });
+          setError(null);
+        } else {
+          logger.warn('Atualização de localização sem lat/lng válidos:', data);
+        }
       } catch (err) {
         logger.error('Erro ao processar localização:', err);
         setError('Erro ao processar localização');
@@ -83,4 +88,4 @@ const useAndroidLocation = () => {
   };
 };
 
-export default useAndroidLocation; 
+export default useAndroidLocation;
